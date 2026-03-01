@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Ginesys AI Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --green:#3dae2b;--green2:#2d8f1e;--green3:#1a6b10;
+  --logo-lt:#6abf4b;--logo-dk:#4a5c3f;
+  --green-bg:#f0fbed;--green-bd:#b8edac;
+  --amber-bg:#fffbeb;--amber-bd:#fcd34d;--amber-text:#92400e;
+  --dark:#1a1f2e;--dark2:#10141f;
+  --bg:#f4f6fa;--white:#fff;--border:#e2e8f0;--border2:#cbd5e1;
+  --text:#1e293b;--text2:#475569;--text3:#94a3b8;--blue:#2563eb;
+  --shadow:0 2px 12px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+
+/* TOPBAR */
+.topbar{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0;background:var(--dark);border-bottom:3px solid var(--green);box-shadow:0 2px 16px rgba(0,0,0,.4);z-index:50}
+.tb-left{display:flex;align-items:center;gap:14px}
+.g-logo{display:flex;align-items:center;gap:11px;text-decoration:none;user-select:none}
+.g-wordmark{display:flex;flex-direction:column;line-height:1.1}
+.g-wordmark-name{font-size:15px;font-weight:800;color:#fff;letter-spacing:-.3px}
+.g-wordmark-one{font-size:9px;font-weight:700;color:var(--logo-lt);letter-spacing:2px;text-transform:uppercase;margin-top:1px}
+.tb-div{width:1px;height:24px;background:rgba(255,255,255,.15)}
+.tb-sub{font-size:12px;color:rgba(255,255,255,.45);font-weight:500}
+.tb-right{display:flex;align-items:center;gap:10px}
+.status-pill{display:flex;align-items:center;gap:6px;border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700}
+.status-pill.on{background:rgba(61,174,43,.13);border:1px solid rgba(61,174,43,.3);color:#5dd64e}
+.status-pill.off{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171}
+.status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+.kb-count{font-size:11px;color:rgba(255,255,255,.3);font-weight:500}
+
+/* LAYOUT */
+.layout{flex:1;display:flex;overflow:hidden;min-height:0}
+
+/* SIDEBAR */
+.sidebar{width:248px;flex-shrink:0;background:var(--dark2);display:flex;flex-direction:column;overflow:hidden;border-right:1px solid rgba(255,255,255,.05)}
+.sb-sec{padding:14px 13px 10px;border-bottom:1px solid rgba(255,255,255,.05)}
+.sb-lbl{font-size:9.5px;font-weight:700;color:rgba(255,255,255,.25);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:10px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:4px 9px;font-size:11px;color:rgba(255,255,255,.5);cursor:pointer;transition:all .15s;font-weight:500;user-select:none}
+.chip:hover{background:rgba(61,174,43,.18);border-color:rgba(61,174,43,.4);color:#a7f3a0}
+.sb-body{flex:1;overflow-y:auto;padding:12px 11px}
+.sugg{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:10px 11px;margin-bottom:7px;cursor:pointer;transition:all .15s}
+.sugg:hover{background:rgba(61,174,43,.09);border-color:rgba(61,174,43,.28)}
+.sugg-tag{font-size:9px;font-weight:700;color:var(--logo-lt);text-transform:uppercase;letter-spacing:.9px;margin-bottom:3px}
+.sugg-q{font-size:12px;color:rgba(255,255,255,.48);line-height:1.4}
+.sb-foot{padding:11px 13px;border-top:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:7px}
+.sb-link{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:9px 11px;text-decoration:none;transition:all .15s}
+.sb-link:hover{background:rgba(61,174,43,.1);border-color:rgba(61,174,43,.3)}
+.sb-link-title{font-size:12px;color:rgba(255,255,255,.62);font-weight:600}
+.sb-link-sub{font-size:10px;color:rgba(255,255,255,.25)}
+
+/* CHAT */
+.chat{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+#messages{flex:1;overflow-y:auto;padding:28px 32px;display:flex;flex-direction:column;gap:24px;min-height:0}
+
+/* WELCOME */
+.welcome{max-width:520px;margin:4px auto;text-align:center;animation:fadeUp .5s ease}
+.welcome-card{display:inline-flex;align-items:center;gap:18px;background:#fff;border-radius:16px;padding:20px 36px;box-shadow:0 2px 20px rgba(61,174,43,.1),0 0 0 1.5px #d4edcc;margin-bottom:20px}
+.welcome-logo-name{font-size:24px;font-weight:800;color:#2d3a2d;letter-spacing:-.4px}
+.welcome-logo-name em{font-style:normal;color:var(--logo-lt)}
+.welcome-h1{font-size:22px;font-weight:800;color:var(--text);letter-spacing:-.4px;margin-bottom:12px}
+.welcome-p{font-size:14px;color:var(--text2);line-height:1.75;margin-bottom:8px}
+.welcome-p strong{color:var(--text)}
+.welcome-hint{font-size:13px;color:var(--text3);margin-top:16px;font-style:italic}
+
+/* MESSAGES */
+.msg-row{display:flex;gap:11px;animation:fadeUp .3s ease}.msg-row.bot>.stream-wrap,.msg-row.bot>.acard{flex:1;min-width:0;max-width:calc(100% - 46px)}
+.msg-row.user{flex-direction:row-reverse}
+.avatar{width:34px;height:34px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.avatar.bot{background:var(--dark);border:2px solid rgba(106,191,75,.5);padding:4px}
+.avatar.user{background:var(--dark);color:white;font-size:13px;font-weight:700}
+.user-bubble{background:var(--dark);color:white;padding:12px 16px;border-radius:13px;border-top-right-radius:3px;font-size:14px;line-height:1.6;font-weight:500;max-width:560px}
+
+/* ANSWER CARD */
+.acard{background:var(--white);border-radius:14px;border-top-left-radius:3px;border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden;max-width:100%;flex:1;min-width:0}
+.acard-head{display:flex;align-items:center;gap:7px;padding:10px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.acard-head.from-kb{background:#f8fafb}
+.acard-head.not-kb{background:var(--amber-bg);border-bottom-color:var(--amber-bd)}
+.badge{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:3px 11px;font-size:11px;font-weight:700;white-space:nowrap}
+.badge.green{background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green3)}
+.badge.amber{background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber-text)}
+.badge.blue{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;text-decoration:none;font-weight:600}
+.badge.blue:hover{background:#dbeafe}
+.not-kb-banner{display:none}
+.not-kb-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.not-kb-text{font-size:12px;color:var(--amber-text);line-height:1.5}
+.not-kb-text strong{font-weight:700}
+.not-kb-text a{color:inherit;font-weight:700}
+
+/* ANSWER BODY */
+.abody{padding:20px 22px;font-size:14px;line-height:1.78;color:var(--text)}
+.abody h1{font-size:18px;font-weight:800;margin:0 0 14px}
+.abody h2{font-size:14.5px;font-weight:700;margin:18px 0 9px;padding-bottom:7px;border-bottom:2px solid #f1f5f9;display:flex;align-items:center;gap:8px}
+.abody h2::before{content:'';display:block;width:3.5px;height:16px;background:var(--green);border-radius:2px;flex-shrink:0}
+.abody h3{font-size:12px;font-weight:700;margin:14px 0 6px;color:var(--green2);text-transform:uppercase;letter-spacing:.5px}
+.abody p{margin-bottom:11px}
+.abody ol,.abody ul{padding-left:22px;margin-bottom:13px}
+.abody li{margin-bottom:8px;line-height:1.7}
+.abody strong{font-weight:700;color:var(--text)}
+.abody code{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;padding:2px 7px;font-size:12.5px;color:var(--green3);font-family:monospace}
+.abody a{color:var(--blue);font-weight:500;word-break:break-all}
+.abody hr{border:none;border-top:2px solid #f1f5f9;margin:16px 0}
+.nav-path{display:inline-flex;align-items:center;flex-wrap:wrap;gap:2px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--green2);font-weight:600;margin:4px 0 12px}
+.nav-sep{color:#86efac;margin:0 3px;font-weight:400}
+
+/* SCREENSHOTS */
+.screenshots{padding:0 20px 18px}
+.ss-title{font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.ss-title::before{content:'';width:3px;height:12px;background:var(--green);border-radius:2px;display:block}
+.ss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.ss-card{border:1.5px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:all .2s}
+.ss-card:hover{border-color:var(--green);box-shadow:0 6px 20px rgba(61,174,43,.15);transform:translateY(-2px)}
+.ss-img{width:100%;height:150px;object-fit:cover;display:block;background:#f1f5f9}
+.ss-cap{padding:7px 10px;font-size:11px;color:var(--text2);font-weight:500;background:#f8fafb;border-top:1px solid var(--border)}
+.ss-ctx{font-size:10px;color:var(--text3);font-style:italic;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* VIDEOS */
+.videos{padding:0 20px 18px}
+.vid-title{font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.vid-title::before{content:'';width:3px;height:12px;background:#e53e3e;border-radius:2px;display:block}
+.vid-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.vid-card{border:1.5px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:all .2s;text-decoration:none;display:block}
+.vid-card:hover{border-color:#e53e3e;box-shadow:0 6px 20px rgba(229,62,62,.12);transform:translateY(-2px)}
+.vid-thumb{width:100%;height:140px;background:#f0f4f8;display:flex;align-items:center;justify-content:center;position:relative}
+.vid-thumb-img{width:100%;height:100%;object-fit:cover}
+.vid-play{position:absolute;width:50px;height:50px;background:rgba(255,255,255,.95);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;color:#333;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+.vid-info{padding:7px 10px;font-size:11px;color:var(--text2);font-weight:500;background:#f8fafb;border-top:1px solid var(--border)}
+.vid-type{font-size:9px;color:#e53e3e;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+
+/* VIDEOS */
+.videos{padding:0 20px 18px}
+.vid-title{font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.vid-title::before{content:'';width:3px;height:12px;background:#6366f1;border-radius:2px;display:block}
+.vid-grid{display:flex;flex-direction:column;gap:9px}
+.vid-card{border:1.5px solid var(--border);border-radius:10px;overflow:hidden;transition:all .2s;background:#fafbff}
+.vid-card:hover{border-color:#6366f1;box-shadow:0 4px 16px rgba(99,102,241,.12)}
+.vid-embed{width:100%;aspect-ratio:16/9;border:none;display:block}
+.vid-file{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;text-decoration:none}
+.vid-icon{width:40px;height:40px;background:#ede9fe;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.vid-info{flex:1;min-width:0}
+.vid-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vid-ctx{font-size:11px;color:var(--text3);margin-top:2px;font-style:italic}
+.vid-badge{font-size:10px;background:#ede9fe;color:#6d28d9;border-radius:4px;padding:2px 7px;font-weight:700;flex-shrink:0}
+
+/* SOURCE FOOTER */
+.src-footer{padding:10px 18px 13px;border-top:1px solid var(--border);background:#fafbfc;display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap}
+.src-label{font-size:11px;color:var(--text3);font-weight:600;white-space:nowrap;padding-top:1px}
+.src-links{display:flex;flex-wrap:wrap;gap:6px}
+.src-link{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--blue);font-weight:600;text-decoration:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:3px 9px}
+.src-link:hover{background:#dbeafe}
+
+/* TYPING */
+.typing-card{background:var(--white);border-radius:13px;border-top-left-radius:3px;padding:14px 17px;box-shadow:var(--shadow);border:1px solid var(--border);display:inline-block}
+.typing-stage{font-size:12px;color:var(--green2);font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.typing-stage::before{content:'';width:7px;height:7px;background:var(--green);border-radius:50%;flex-shrink:0;animation:pulse 1s infinite}
+.dots{display:flex;gap:5px}
+.dots span{width:8px;height:8px;border-radius:50%;background:#dde3ea;animation:bounce 1.2s infinite}
+.dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}
+.err-card{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:13px 17px;font-size:13px;color:#b91c1c;max-width:600px}
+
+/* INPUT */
+.input-area{padding:12px 32px 18px;border-top:1px solid var(--border);background:var(--white);flex-shrink:0}
+.input-wrap{display:flex;align-items:flex-end;gap:10px;background:#f7f9fc;border:2px solid var(--border2);border-radius:13px;padding:10px 10px 10px 17px;transition:all .2s}
+.input-wrap:focus-within{border-color:var(--green);background:white;box-shadow:0 0 0 4px rgba(61,174,43,.08)}
+#q{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:14px;line-height:1.55;resize:none;max-height:130px;min-height:24px}
+#q::placeholder{color:var(--text3)}
+#q::-webkit-scrollbar{display:none}
+#send-btn{width:40px;height:40px;background:var(--green);border:none;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;color:white}
+#send-btn:hover:not(:disabled){background:var(--green2);transform:scale(1.05);box-shadow:0 4px 14px rgba(61,174,43,.4)}
+#send-btn:disabled{opacity:.35;cursor:default;transform:none}
+.input-footer{display:flex;justify-content:space-between;margin-top:7px;font-size:11px;color:var(--text3);padding:0 2px}
+.input-footer a{color:var(--green2);text-decoration:none;font-weight:600}
+
+/* LIGHTBOX */
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:999;align-items:center;justify-content:center;padding:20px;flex-direction:column;gap:12px}
+.lightbox.open{display:flex;animation:fadeIn .2s}
+.lb-img{max-width:90vw;max-height:82vh;border-radius:10px}
+.lb-close{position:absolute;top:18px;right:22px;background:rgba(255,255,255,.1);border:none;color:white;font-size:20px;cursor:pointer;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center}
+.lb-cap{color:rgba(255,255,255,.7);font-size:13px;font-weight:500;text-align:center;max-width:70vw}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}
+
+.stream-card{min-height:40px;width:100%}
+.stream-text{line-height:1.8;font-size:14px;color:var(--text)}
+.stream-text p{margin:0 0 10px}
+.stream-text h2{font-size:16px;font-weight:700;margin:16px 0 8px;color:var(--heading,#111)}
+.stream-text h3{font-size:14px;font-weight:700;margin:12px 0 6px;color:var(--heading,#111)}
+.stream-text ol,.stream-text ul{padding-left:20px;margin:8px 0}
+.stream-text li{margin:4px 0}
+.stream-text strong{font-weight:700}
+.stream-text code{background:#f0f4f8;padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace}
+.stream-text a{color:#2563eb;text-decoration:none}
+.stream-text a:hover{text-decoration:underline}
+
+/* ── Related questions ─────────────── */
+.related-qs{padding:10px 20px 14px;border-top:1px solid var(--border);margin-top:4px}
+.related-label{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.related-btn{display:inline-block;margin:3px 4px 3px 0;padding:5px 12px;background:#f0f4f8;border:1.5px solid #d1d5db;border-radius:20px;font-size:12px;color:#374151;cursor:pointer;transition:all .15s}
+.related-btn:hover{background:#e0e7ff;border-color:#6366f1;color:#4338ca}
+/* ── Feedback row ──────────────────── */
+.feedback-row{display:flex;align-items:center;gap:8px;padding:8px 20px 14px;border-top:1px solid var(--border)}
+.fb-label{font-size:12px;color:#9ca3af}
+.fb-btn{background:none;border:1.5px solid #d1d5db;border-radius:8px;padding:3px 10px;font-size:16px;cursor:pointer;transition:all .15s}
+.fb-btn:hover{border-color:#16a34a;background:#f0fdf4;transform:scale(1.15)}
+/* ── Stream card ───────────────────── */
+.stream-card{min-height:40px;width:100%}
+.stream-body{line-height:1.8;font-size:14px;color:var(--text);padding:16px 20px}
+.stream-body p{margin:0 0 10px}
+.stream-body h2{font-size:16px;font-weight:700;margin:16px 0 8px}
+.stream-body h3{font-size:14px;font-weight:700;margin:12px 0 6px}
+.stream-body ol,.stream-body ul{padding-left:20px;margin:8px 0}
+.stream-body li{margin:4px 0}
+.stream-body strong{font-weight:700}
+.stream-body code{background:#f0f4f8;padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace}
+.stream-body a{color:#2563eb;text-decoration:none}
+.stream-body a:hover{text-decoration:underline}
+/* ── Cached badge ──────────────────── */
+.badge-bar{padding:12px 20px 4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+/* ── Voice btn ─────────────────────── */
+#voice-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:8px;color:#6b7280;transition:all .15s}
+#voice-btn:hover{background:#f3f4f6;color:#374151}
+
+/* ── Language selector ─────────────────────────────────── */
+.lang-bar{display:flex;align-items:center;gap:6px;padding:8px 20px;background:#f8fafc;border-top:1px solid var(--border);flex-wrap:wrap}
+.lang-label{font-size:12px;color:#64748b;font-weight:600;margin-right:4px}
+.lang-btn{padding:4px 12px;border-radius:20px;border:1.5px solid #d1d5db;background:#fff;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;color:#374151;font-family:inherit}
+.lang-btn:hover{border-color:#6366f1;color:#4338ca;background:#eef2ff}
+.lang-btn.active{background:#6366f1;color:#fff;border-color:#6366f1;font-weight:700}
+/* ── Language indicator in chat ───────────────────────────*/
+.lang-indicator{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#6366f1;background:#eef2ff;padding:2px 8px;border-radius:10px;margin-bottom:6px;font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="tb-left">
+    <a class="g-logo" href="https://www.ginesys.in" target="_blank">
+      <svg width="50" height="32" viewBox="0 0 50 32" xmlns="http://www.w3.org/2000/svg">
+  <defs><linearGradient id="lg-tb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#75bf45"/><stop offset=".4" stop-color="#6ab045"/><stop offset=".76" stop-color="#598446"/><stop offset="1" stop-color="#42554a"/></linearGradient></defs>
+  <g transform="translate(2.00,4.13) scale(0.3651)">
+  <path fill="#75bf45" d="M62.83,34.59c-1-.02-1.84-.75-2.01-1.74-2.1-14.28-11.73-28.71-28.43-28.71-15.65,.03-28.34,12.72-28.37,28.37,.1,1.11-.72,2.08-1.83,2.18-1.11,.1-2.08-.72-2.18-1.83-.01-.12-.01-.23,0-.35C-.02,14.61,14.47,.08,32.37,.06h.02C48.89,.06,61.96,13.01,64.86,32.31c.14,1.09-.6,2.1-1.69,2.29-.11,.05-.23,.05-.34,0Z"/>
+  <path fill="#75bf45" d="M93.21,64.98c-8.4,.06-16.44-3.44-22.13-9.62-5.7-6.27-9.28-14.16-10.26-22.58-.13-1.12,.67-2.12,1.79-2.25s2.12,.67,2.25,1.79h0c1.87,14.28,11.4,28.63,28.43,28.63,15.69,0,28.41-12.74,28.4-28.43h0c-.1-1.11,.72-2.08,1.83-2.18,1.11-.1,2.08,.72,2.18,1.83,0,.12,0,.23,0,.35-.02,17.93-14.56,32.46-32.49,32.46Z"/>
+  <path fill="#42554a" d="M118.62,17.9c-.63-.06-1.2-.4-1.54-.94C108.56,3.85,91.02,.14,77.92,8.66c-3.31,2.16-6.14,4.98-8.3,8.3-.67,.91-1.95,1.1-2.86,.43-.83-.61-1.07-1.74-.57-2.64C75.86-.21,95.83-4.5,110.79,5.18c3.83,2.48,7.1,5.74,9.57,9.57,.6,.94,.34,2.2-.6,2.81-.3,.28-.73,.41-1.14,.34Z"/>
+  <path fill="#75bf45" d="M123.66,34.59h-28.17c-1.11,0-2.01-.9-2.01-2.01s.9-2.01,2.01-2.01h28.17c1.09-.02,1.98,.85,2,1.93v.08c-.01,1.11-.9,2.01-2,2.01Z"/>
+  <path fill="#42554a" d="M32.45,64.98c-11.66,0-22.42-6.28-28.15-16.43-.2-.34-.4-.74-.6-1.08C1.33,42.87,.09,37.76,.08,32.59c0-1.11,.9-2.01,2.01-2.01s2.01,.9,2.01,2.01c-.03,4.54,1.02,9.03,3.07,13.09,.16,.32,.34,.64,.54,.94,7.67,13.67,24.97,18.54,38.64,10.88,2.95-1.65,5.58-3.82,7.76-6.39,1.16-1.38,2.18-2.86,3.07-4.42,.56-.96,1.79-1.28,2.75-.74,.96,.53,1.3,1.74,.77,2.69,0,.02-.02,.04-.03,.05-1.04,1.82-2.24,3.54-3.59,5.15-6.24,7.06-15.2,11.12-24.63,11.14Z"/>
+  <path fill="url(#lg-tb)" d="M31.76,64.98C13.87,64.59-.31,49.78,.08,31.89,.46,14.55,14.42,.59,31.76,.21c1.09-.03,1.99,.83,2.01,1.92v.09c.03,1.09-.83,1.99-1.92,2.01h-.09c-15.66,.36-28.07,13.36-27.7,29.02,.35,15.15,12.55,27.35,27.7,27.7,1.09-.03,1.99,.83,2.02,1.92v.17c-.05,1.08-.94,1.94-2.02,1.94Z"/>
+  </g></svg>
+      <div class="g-wordmark">
+        <span class="g-wordmark-name">Ginesys</span>
+        <span class="g-wordmark-one">One</span>
+      </div>
+    </a>
+    <div class="tb-div"></div>
+    <span class="tb-sub">Ginesys AI Assistant</span>
+  </div>
+  <div class="tb-right">
+    <span class="kb-count" id="kb-count"></span>
+    <div class="status-pill off" id="status-pill">
+      <div class="status-dot"></div>
+      <span id="status-txt">Connecting</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sb-sec">
+      <div class="sb-lbl">Browse Topics</div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="sb-body" id="sugg-list">
+      <div class="sb-lbl" style="padding:12px 2px 8px">Suggested Questions</div>
+    </div>
+    <div class="sb-foot">
+      <a class="sb-link" href="https://ginesysone.atlassian.net/wiki/spaces/PUB/overview" target="_blank">
+        <span style="font-size:17px">📚</span>
+        <div><div class="sb-link-title">Ginesys One Wiki</div><div class="sb-link-sub">Official Knowledge Base</div></div>
+      </a>
+      <a class="sb-link" href="https://www.ginesys.in" target="_blank">
+        <span style="font-size:17px">🌐</span>
+        <div><div class="sb-link-title">ginesys.in</div><div class="sb-link-sub">Official Website</div></div>
+      </a>
+    </div>
+  </aside>
+
+  <div class="chat">
+    <div id="messages">
+      <div class="welcome" id="welcome">
+        <!-- White background card with logo -->
+        <div class="welcome-card">
+<svg width="64" height="42" viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg">
+  <defs><linearGradient id="lg-wc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#75bf45"/><stop offset=".4" stop-color="#6ab045"/><stop offset=".76" stop-color="#598446"/><stop offset="1" stop-color="#42554a"/></linearGradient></defs>
+  <g transform="translate(2.00,5.52) scale(0.4762)">
+  <path fill="#75bf45" d="M62.83,34.59c-1-.02-1.84-.75-2.01-1.74-2.1-14.28-11.73-28.71-28.43-28.71-15.65,.03-28.34,12.72-28.37,28.37,.1,1.11-.72,2.08-1.83,2.18-1.11,.1-2.08-.72-2.18-1.83-.01-.12-.01-.23,0-.35C-.02,14.61,14.47,.08,32.37,.06h.02C48.89,.06,61.96,13.01,64.86,32.31c.14,1.09-.6,2.1-1.69,2.29-.11,.05-.23,.05-.34,0Z"/>
+  <path fill="#75bf45" d="M93.21,64.98c-8.4,.06-16.44-3.44-22.13-9.62-5.7-6.27-9.28-14.16-10.26-22.58-.13-1.12,.67-2.12,1.79-2.25s2.12,.67,2.25,1.79h0c1.87,14.28,11.4,28.63,28.43,28.63,15.69,0,28.41-12.74,28.4-28.43h0c-.1-1.11,.72-2.08,1.83-2.18,1.11-.1,2.08,.72,2.18,1.83,0,.12,0,.23,0,.35-.02,17.93-14.56,32.46-32.49,32.46Z"/>
+  <path fill="#42554a" d="M118.62,17.9c-.63-.06-1.2-.4-1.54-.94C108.56,3.85,91.02,.14,77.92,8.66c-3.31,2.16-6.14,4.98-8.3,8.3-.67,.91-1.95,1.1-2.86,.43-.83-.61-1.07-1.74-.57-2.64C75.86-.21,95.83-4.5,110.79,5.18c3.83,2.48,7.1,5.74,9.57,9.57,.6,.94,.34,2.2-.6,2.81-.3,.28-.73,.41-1.14,.34Z"/>
+  <path fill="#75bf45" d="M123.66,34.59h-28.17c-1.11,0-2.01-.9-2.01-2.01s.9-2.01,2.01-2.01h28.17c1.09-.02,1.98,.85,2,1.93v.08c-.01,1.11-.9,2.01-2,2.01Z"/>
+  <path fill="#42554a" d="M32.45,64.98c-11.66,0-22.42-6.28-28.15-16.43-.2-.34-.4-.74-.6-1.08C1.33,42.87,.09,37.76,.08,32.59c0-1.11,.9-2.01,2.01-2.01s2.01,.9,2.01,2.01c-.03,4.54,1.02,9.03,3.07,13.09,.16,.32,.34,.64,.54,.94,7.67,13.67,24.97,18.54,38.64,10.88,2.95-1.65,5.58-3.82,7.76-6.39,1.16-1.38,2.18-2.86,3.07-4.42,.56-.96,1.79-1.28,2.75-.74,.96,.53,1.3,1.74,.77,2.69,0,.02-.02,.04-.03,.05-1.04,1.82-2.24,3.54-3.59,5.15-6.24,7.06-15.2,11.12-24.63,11.14Z"/>
+  <path fill="url(#lg-wc)" d="M31.76,64.98C13.87,64.59-.31,49.78,.08,31.89,.46,14.55,14.42,.59,31.76,.21c1.09-.03,1.99,.83,2.01,1.92v.09c.03,1.09-.83,1.99-1.92,2.01h-.09c-15.66,.36-28.07,13.36-27.7,29.02,.35,15.15,12.55,27.35,27.7,27.7,1.09-.03,1.99,.83,2.02,1.92v.17c-.05,1.08-.94,1.94-2.02,1.94Z"/>
+  </g></svg>
+          <span class="welcome-logo-name">Ginesys <em>One</em></span>
+        </div>
+        <h1 class="welcome-h1">Ginesys AI Assistant</h1>
+        <p class="welcome-p">Ask anything about Ginesys ERP — get step-by-step answers sourced from the <strong>complete Ginesys One Knowledge Base</strong> across all spaces.</p>
+        <p class="welcome-p">Try: Purchase Orders, GST, POS billing, GRC, Stock Transfers, Journal Vouchers, Users, E-Way Bills…</p>
+        <p class="welcome-hint">Type your question below and press Enter ↵</p>
+      </div>
+    </div>
+
+    <!-- Language Selector -->
+    <div class="lang-bar">
+      <span class="lang-label">🌐 Language:</span>
+      <button class="lang-btn active" data-lang="en" onclick="setLang(this,'en')">English</button>
+      <button class="lang-btn" data-lang="hi" onclick="setLang(this,'hi')">हिंदी</button>
+      <button class="lang-btn" data-lang="kn" onclick="setLang(this,'kn')">ಕನ್ನಡ</button>
+      <button class="lang-btn" data-lang="ta" onclick="setLang(this,'ta')">தமிழ்</button>
+      <button class="lang-btn" data-lang="te" onclick="setLang(this,'te')">తెలుగు</button>
+      <button class="lang-btn" data-lang="ml" onclick="setLang(this,'ml')">മലയാളം</button>
+      <button class="lang-btn" data-lang="bn" onclick="setLang(this,'bn')">বাংলা</button>
+    </div>
+    <div class="input-area">
+      <div class="input-wrap">
+        <textarea id="q" rows="1" placeholder="Ask anything about Ginesys ERP — PO, GST, POS, GRC, JV, Stock Transfer, Users, Reports…"></textarea>
+        <button id="voice-btn" onclick="toggleVoice()" title="Voice input">🎤</button>
+      <button id="send-btn" title="Send (Enter)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="input-footer">
+        <span>Enter to send · Shift+Enter for new line</span>
+        <span>Source: <a href="https://ginesysone.atlassian.net" target="_blank">ginesysone.atlassian.net</a></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="closeLB()">
+  <button class="lb-close" onclick="event.stopPropagation();closeLB()">✕</button>
+  <img class="lb-img" id="lb-img" src="" alt=""/>
+  <div class="lb-cap" id="lb-cap"></div>
+</div>
+
+<script>
+const TOPICS = ['POS','GST','GRC','Purchase Order','Inventory','Finance','Stock Transfer','Users & Roles','Reports','E-Way Bill','Production','Installation'];
+const SUGGS  = [
+  {tag:'Procurement',  q:'How to create a Purchase Order (PO)?'},
+  {tag:'Tax',          q:'How to configure GST rates and GSTIN?'},
+  {tag:'POS',          q:'How to process a POS sale and settlement?'},
+  {tag:'GRC',          q:'How to create a Goods Receive Challan (GRC)?'},
+  {tag:'Inventory',    q:'How to do a Stock Point Transfer between stores?'},
+  {tag:'Finance',      q:'How to create and post a Journal Voucher (JV)?'},
+  {tag:'Compliance',   q:'How to generate an E-Way Bill (EWB)?'},
+  {tag:'Admin',        q:'How to create users and assign roles?'},
+  {tag:'Reports',      q:'How to view the Stock Point Transfer Register?'},
+];
+
+let chatHistory = [], isLoading = false;
+const qEl    = document.getElementById('q');
+const sendBtn= document.getElementById('send-btn');
+const msgsEl = document.getElementById('messages');
+
+document.getElementById('chips').innerHTML = TOPICS.map(t =>
+  `<div class="chip" onclick="fill('${t} in Ginesys')">${t}</div>`).join('');
+
+const sl = document.getElementById('sugg-list');
+sl.innerHTML = '<div class="sb-lbl" style="padding:12px 2px 8px">Suggested Questions</div>';
+SUGGS.forEach(s => {
+  const d = document.createElement('div');
+  d.className='sugg';
+  d.innerHTML=`<div class="sugg-tag">${s.tag}</div><div class="sugg-q">${s.q}</div>`;
+  d.onclick=()=>fill(s.q);
+  sl.appendChild(d);
+});
+
+async function checkStatus() {
+  try {
+    const d = await fetch(window.location.origin + '/api/status').then(r=>r.json());
+    const pill=document.getElementById('status-pill'),txt=document.getElementById('status-txt'),kbc=document.getElementById('kb-count');
+    if (d.status==='ok') {
+      pill.className='status-pill on'; txt.textContent='Online';
+      if (d.kb?.loaded && d.kb.totalPages>0) {
+        const sp = d.kb.spaces ? ` · ${d.kb.spaces} spaces` : '';
+        const vids = d.kb.totalVideos ? ` · ${d.kb.totalVideos.toLocaleString()} videos` : '';
+        kbc.textContent=`${d.kb.totalPages.toLocaleString()} articles · ${(d.kb.totalImages||0).toLocaleString()} images${vids}${sp}`;
+      } else { kbc.textContent='KB not indexed'; }
+    }
+  } catch { document.getElementById('status-pill').className='status-pill off'; document.getElementById('status-txt').textContent='Offline'; }
+}
+checkStatus(); setInterval(checkStatus,30000);
+
+qEl.addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,130)+'px';});
+qEl.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg();}});
+sendBtn.onclick=sendMsg;
+function fill(t){qEl.value=t;qEl.dispatchEvent(new Event('input'));qEl.focus();}
+
+// Ginesys logo SVG for bot avatar
+const BOT_SVG = `<svg width="24" height="16" viewBox="0 0 24 16" xmlns="http://www.w3.org/2000/svg">
+  <defs><linearGradient id="lg-bot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#75bf45"/><stop offset=".4" stop-color="#6ab045"/><stop offset=".76" stop-color="#598446"/><stop offset="1" stop-color="#42554a"/></linearGradient></defs>
+  <g transform="translate(2.00,2.84) scale(0.1587)">
+  <path fill="#75bf45" d="M62.83,34.59c-1-.02-1.84-.75-2.01-1.74-2.1-14.28-11.73-28.71-28.43-28.71-15.65,.03-28.34,12.72-28.37,28.37,.1,1.11-.72,2.08-1.83,2.18-1.11,.1-2.08-.72-2.18-1.83-.01-.12-.01-.23,0-.35C-.02,14.61,14.47,.08,32.37,.06h.02C48.89,.06,61.96,13.01,64.86,32.31c.14,1.09-.6,2.1-1.69,2.29-.11,.05-.23,.05-.34,0Z"/>
+  <path fill="#75bf45" d="M93.21,64.98c-8.4,.06-16.44-3.44-22.13-9.62-5.7-6.27-9.28-14.16-10.26-22.58-.13-1.12,.67-2.12,1.79-2.25s2.12,.67,2.25,1.79h0c1.87,14.28,11.4,28.63,28.43,28.63,15.69,0,28.41-12.74,28.4-28.43h0c-.1-1.11,.72-2.08,1.83-2.18,1.11-.1,2.08,.72,2.18,1.83,0,.12,0,.23,0,.35-.02,17.93-14.56,32.46-32.49,32.46Z"/>
+  <path fill="#42554a" d="M118.62,17.9c-.63-.06-1.2-.4-1.54-.94C108.56,3.85,91.02,.14,77.92,8.66c-3.31,2.16-6.14,4.98-8.3,8.3-.67,.91-1.95,1.1-2.86,.43-.83-.61-1.07-1.74-.57-2.64C75.86-.21,95.83-4.5,110.79,5.18c3.83,2.48,7.1,5.74,9.57,9.57,.6,.94,.34,2.2-.6,2.81-.3,.28-.73,.41-1.14,.34Z"/>
+  <path fill="#75bf45" d="M123.66,34.59h-28.17c-1.11,0-2.01-.9-2.01-2.01s.9-2.01,2.01-2.01h28.17c1.09-.02,1.98,.85,2,1.93v.08c-.01,1.11-.9,2.01-2,2.01Z"/>
+  <path fill="#42554a" d="M32.45,64.98c-11.66,0-22.42-6.28-28.15-16.43-.2-.34-.4-.74-.6-1.08C1.33,42.87,.09,37.76,.08,32.59c0-1.11,.9-2.01,2.01-2.01s2.01,.9,2.01,2.01c-.03,4.54,1.02,9.03,3.07,13.09,.16,.32,.34,.64,.54,.94,7.67,13.67,24.97,18.54,38.64,10.88,2.95-1.65,5.58-3.82,7.76-6.39,1.16-1.38,2.18-2.86,3.07-4.42,.56-.96,1.79-1.28,2.75-.74,.96,.53,1.3,1.74,.77,2.69,0,.02-.02,.04-.03,.05-1.04,1.82-2.24,3.54-3.59,5.15-6.24,7.06-15.2,11.12-24.63,11.14Z"/>
+  <path fill="url(#lg-bot)" d="M31.76,64.98C13.87,64.59-.31,49.78,.08,31.89,.46,14.55,14.42,.59,31.76,.21c1.09-.03,1.99,.83,2.01,1.92v.09c.03,1.09-.83,1.99-1.92,2.01h-.09c-15.66,.36-28.07,13.36-27.7,29.02,.35,15.15,12.55,27.35,27.7,27.7,1.09-.03,1.99,.83,2.02,1.92v.17c-.05,1.08-.94,1.94-2.02,1.94Z"/>
+  </g></svg>`;
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// Detect UI commands that shouldn't hit the KB
+function detectCommand(text) {
+  const t = text.toLowerCase().trim();
+  if (/^(clear|reset|restart|home|homepage|home page|start over|new chat)$/.test(t)) return 'CLEAR';
+  if (/\b(delete|clear|erase|remove)\s+(the\s+)?(above|last|previous|that|this)/.test(t)) return 'CLEAR';
+  if (/give me (the\s+)?(home|homepage|home page|start)/.test(t)) return 'CLEAR';
+  return null;
+}
+
+function showWelcome() {
+  msgsEl.innerHTML='';
+  chatHistory=[];
+  const w=document.createElement('div');
+  w.className='welcome'; w.id='welcome';
+  w.innerHTML=`
+    <div class="welcome-card">
+      <svg width="64" height="42" viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg">
+  <defs><linearGradient id="lg-sw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#75bf45"/><stop offset=".4" stop-color="#6ab045"/><stop offset=".76" stop-color="#598446"/><stop offset="1" stop-color="#42554a"/></linearGradient></defs>
+  <g transform="translate(2.00,5.52) scale(0.4762)">
+  <path fill="#75bf45" d="M62.83,34.59c-1-.02-1.84-.75-2.01-1.74-2.1-14.28-11.73-28.71-28.43-28.71-15.65,.03-28.34,12.72-28.37,28.37,.1,1.11-.72,2.08-1.83,2.18-1.11,.1-2.08-.72-2.18-1.83-.01-.12-.01-.23,0-.35C-.02,14.61,14.47,.08,32.37,.06h.02C48.89,.06,61.96,13.01,64.86,32.31c.14,1.09-.6,2.1-1.69,2.29-.11,.05-.23,.05-.34,0Z"/>
+  <path fill="#75bf45" d="M93.21,64.98c-8.4,.06-16.44-3.44-22.13-9.62-5.7-6.27-9.28-14.16-10.26-22.58-.13-1.12,.67-2.12,1.79-2.25s2.12,.67,2.25,1.79h0c1.87,14.28,11.4,28.63,28.43,28.63,15.69,0,28.41-12.74,28.4-28.43h0c-.1-1.11,.72-2.08,1.83-2.18,1.11-.1,2.08,.72,2.18,1.83,0,.12,0,.23,0,.35-.02,17.93-14.56,32.46-32.49,32.46Z"/>
+  <path fill="#42554a" d="M118.62,17.9c-.63-.06-1.2-.4-1.54-.94C108.56,3.85,91.02,.14,77.92,8.66c-3.31,2.16-6.14,4.98-8.3,8.3-.67,.91-1.95,1.1-2.86,.43-.83-.61-1.07-1.74-.57-2.64C75.86-.21,95.83-4.5,110.79,5.18c3.83,2.48,7.1,5.74,9.57,9.57,.6,.94,.34,2.2-.6,2.81-.3,.28-.73,.41-1.14,.34Z"/>
+  <path fill="#75bf45" d="M123.66,34.59h-28.17c-1.11,0-2.01-.9-2.01-2.01s.9-2.01,2.01-2.01h28.17c1.09-.02,1.98,.85,2,1.93v.08c-.01,1.11-.9,2.01-2,2.01Z"/>
+  <path fill="#42554a" d="M32.45,64.98c-11.66,0-22.42-6.28-28.15-16.43-.2-.34-.4-.74-.6-1.08C1.33,42.87,.09,37.76,.08,32.59c0-1.11,.9-2.01,2.01-2.01s2.01,.9,2.01,2.01c-.03,4.54,1.02,9.03,3.07,13.09,.16,.32,.34,.64,.54,.94,7.67,13.67,24.97,18.54,38.64,10.88,2.95-1.65,5.58-3.82,7.76-6.39,1.16-1.38,2.18-2.86,3.07-4.42,.56-.96,1.79-1.28,2.75-.74,.96,.53,1.3,1.74,.77,2.69,0,.02-.02,.04-.03,.05-1.04,1.82-2.24,3.54-3.59,5.15-6.24,7.06-15.2,11.12-24.63,11.14Z"/>
+  <path fill="url(#lg-sw)" d="M31.76,64.98C13.87,64.59-.31,49.78,.08,31.89,.46,14.55,14.42,.59,31.76,.21c1.09-.03,1.99,.83,2.01,1.92v.09c.03,1.09-.83,1.99-1.92,2.01h-.09c-15.66,.36-28.07,13.36-27.7,29.02,.35,15.15,12.55,27.35,27.7,27.7,1.09-.03,1.99,.83,2.02,1.92v.17c-.05,1.08-.94,1.94-2.02,1.94Z"/>
+  </g></svg>
+      <span class="welcome-logo-name">Ginesys <em>One</em></span>
+    </div>
+    <h1 class="welcome-h1">Ginesys AI Assistant</h1>
+    <p class="welcome-p">Ask anything about Ginesys ERP — get step-by-step answers sourced from the <strong>complete Ginesys One Knowledge Base</strong>.</p>
+    <p class="welcome-hint">Type your question below and press Enter ↵</p>`;
+  msgsEl.appendChild(w);
+  msgsEl.scrollTop=0;
+  qEl.focus();
+}
+
+function md(text) {
+  text=text.replace(/^⚠️ NOT FOUND IN KB\s*\n?/,'').replace(/^This topic was not found[^\n]*\n?/,'').trim();
+  text=text.replace(/(Ginesys\s+(?:Web|ERP|One|POS)\s*[>→►].+?)(\.|,|\n|$)/g,(_,p,end)=>{
+    const parts=p.split(/\s*[>→►]\s*/);
+    const inner=parts.map((pt,i)=>i<parts.length-1?`${esc(pt.trim())} <span class="nav-sep">›</span>`:`<strong>${esc(pt.trim())}</strong>`).join(' ');
+    return `<div class="nav-path">${inner}</div>${end}`;
+  });
+  return text
+    .replace(/^#### (.+)$/gm,'<h3>$1</h3>').replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/^\d+\. (.+)$/gm,'<li>$1</li>').replace(/^[•\-\*] (.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>[\s\S]*?<\/li>\n?)+/g,m=>`<ol>${m}</ol>`)
+    .replace(/^---+$/gm,'<hr>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,'<a href="$2" target="_blank">$1</a>')
+    .split('\n\n').map(p=>{
+      p=p.trim(); if(!p) return '';
+      // Convert bare YouTube URLs into clickable thumbnail cards
+      p=p.replace(/https:\/\/(?:www\.)?youtube\.com\/watch\?v=([\w-]+)(?:[^\s<"]*)?/g,(_,vid)=>{
+        const thumb=`https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
+        return `<div class="yt-inline-card" onclick="this.innerHTML='<iframe width=100% height=200 src=https://www.youtube.com/embed/${vid}?autoplay=1 frameborder=0 allowfullscreen allow=autoplay></iframe>'" style="cursor:pointer;margin:8px 0;border-radius:10px;overflow:hidden;max-width:480px;border:1px solid #e5e7eb;display:block">
+          <div style="position:relative"><img src="${thumb}" style="width:100%;display:block;max-height:200px;object-fit:cover" onerror="this.style.display='none'"/>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.7);border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center;font-size:20px">▶</div></div>
+          <div style="padding:8px 10px;font-size:12px;color:#374151;background:#fff">▶ Click to play</div></div>`;
+      });
+      if(/^<[h1-6ouldivhr]/.test(p)) return p;
+      return `<p>${p.replace(/\n/g,' ')}</p>`;
+    }).join('\n');
+}
+
+function appendUser(text) {
+  document.getElementById('welcome')?.remove();
+  const row=document.createElement('div');
+  row.className='msg-row user';
+  row.innerHTML=`<div class="avatar user">U</div><div><div class="user-bubble">${esc(text)}</div></div>`;
+  msgsEl.appendChild(row); msgsEl.scrollTop=msgsEl.scrollHeight;
+}
+
+function appendBot(answer,fromKB,sources,images,videos,casual) {
+  const row=document.createElement('div'); row.className='msg-row';
+  // Casual chat — render as simple message, no KB card
+  if (casual) {
+    row.innerHTML=`<div class="avatar bot">${BOT_SVG}</div><div><div class="typing-card" style="max-width:520px;padding:14px 18px;font-size:14px;line-height:1.7;color:var(--text)">${md(answer)}</div></div>`;
+    msgsEl.appendChild(row);
+    setTimeout(()=>row.scrollIntoView({behavior:'smooth',block:'start'}),60);
+    return;
+  }
+  const headCls=fromKB?'from-kb':'not-kb';
+  const mainBadge=(sources&&sources.length>0)?`<span class="badge green">✓ Ginesys One Wiki</span>`:`<span class="badge green" style="background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe">✦ Ginesys AI</span>`;
+  const srcBadges=(sources&&sources.length>0)?(sources||[]).map((s,i)=>`<a class="badge blue" href="${s.url}" target="_blank">📄 ${esc(s.title||'Article '+(i+1))}</a>`).join(''):'';
+  const notKbBanner='';
+  let ssHtml='';
+  if (fromKB&&images&&images.length>0&&sources&&sources.length>0) {
+    const cards=images.map(img=>{
+      const cleanCap = (img.caption||'')
+        .replace(/^image\d[\d\s._-]*/i,'')  // strip "image2022 6 2 13 9 18" type names
+        .replace(/\.(png|jpg|jpeg|gif|webp)$/i,'')
+        .replace(/[-_]+/g,' ').trim() || img.pageTitle || 'Screenshot';
+      return `<div class="ss-card" onclick="openLB('${img.proxyUrl}','${esc(cleanCap)}')">
+        <img class="ss-img" src="${img.proxyUrl}" alt="${esc(cleanCap)}" loading="lazy" onerror="this.closest('.ss-card').style.display='none'"/>
+        <div class="ss-cap">${esc(cleanCap)}${img.context?`<div class="ss-ctx">${esc(img.context.slice(0,60))}</div>`:''}</div>
+      </div>`;
+    }).join('');
+    ssHtml=`<div class="screenshots"><div class="ss-title">Screenshots from KB</div><div class="ss-grid">${cards}</div></div>`;
+  }
+  let vidHtml='';
+  if (fromKB&&videos&&videos.length>0&&sources&&sources.length>0) {
+    const vcards=videos.map(vid=>{
+      const cleanCaption = (vid.caption||'Video')
+        .replace(/^image\d[\d\s_-]*/i,'')  // remove "image2022 6 2..." filenames
+        .replace(/\.(mp4|mov|avi|webm)$/i,'')
+        .replace(/[-_]+/g,' ').trim() || vid.pageTitle || 'Video';
+
+      if (vid.type==='youtube'&&vid.videoId) {
+        // YouTube — embed iframe with thumbnail
+        const thumb=`https://img.youtube.com/vi/${vid.videoId}/hqdefault.jpg`;
+        return `<div class="vid-card">
+          <div class="vid-thumb" style="cursor:pointer" onclick="this.innerHTML='<iframe width=100% height=140 src=https://www.youtube.com/embed/${vid.videoId}?autoplay=1 frameborder=0 allowfullscreen allow=autoplay></iframe>'">
+            <img class="vid-thumb-img" src="${thumb}" onerror="this.style.display='none'"/>
+            <div class="vid-play">▶</div>
+          </div>
+          <div class="vid-info"><div class="vid-type">YouTube</div>${esc(cleanCaption)}</div>
+        </div>`;
+      } else if (vid.type==='vimeo'&&vid.videoId) {
+        return `<div class="vid-card">
+          <div class="vid-thumb" style="cursor:pointer" onclick="this.innerHTML='<iframe width=100% height=140 src=https://player.vimeo.com/video/${vid.videoId}?autoplay=1 frameborder=0 allowfullscreen allow=autoplay></iframe>'">
+            <div class="vid-play">▶</div>
+          </div>
+          <div class="vid-info"><div class="vid-type">Vimeo</div>${esc(cleanCaption)}</div>
+        </div>`;
+      } else {
+        // Confluence .mp4 — use <video> tag with proxy URL (auth handled server-side)
+        const src = vid.proxyUrl || vid.url;
+        return `<div class="vid-card">
+          <div class="vid-thumb" style="cursor:pointer;padding:0" onclick="this.outerHTML='<video controls autoplay style=width:100%;max-height:300px;border-radius:10px><source src=${src} type=video/mp4>Your browser does not support video.</video>'">
+            <div style="text-align:center;color:#aaa;font-size:12px;padding:10px">
+              <div style="font-size:36px">🎬</div>
+              <div style="margin-top:6px">${esc(cleanCaption)}</div>
+              <div style="font-size:10px;margin-top:4px;color:#666">Click to play</div>
+            </div>
+          </div>
+          <div class="vid-info"><div class="vid-type">VIDEO</div>${esc(cleanCaption)}</div>
+        </div>`;
+      }
+    }).join('');
+    vidHtml=`<div class="videos"><div class="vid-title">Videos from KB</div><div class="vid-grid">${vcards}</div></div>`;
+  }
+  const srcFooter=fromKB&&sources&&sources.length
+    ?`<div class="src-footer"><span class="src-label">📖 Source:</span><div class="src-links">${sources.map(s=>`<a class="src-link" href="${s.url}" target="_blank">↗ ${esc(s.title)}</a>`).join('')}</div></div>`:'';
+  row.innerHTML=`
+    <div class="avatar bot">${BOT_SVG}</div>
+    <div class="acard">
+      <div class="acard-head ${headCls}">${mainBadge}${srcBadges}</div>
+      ${notKbBanner}
+      <div class="abody">${md(answer)}</div>
+      ${ssHtml}
+      ${vidHtml}
+      ${srcFooter}
+    </div>`;
+  msgsEl.appendChild(row);
+  setTimeout(()=>row.scrollIntoView({behavior:'smooth',block:'start'}),60);
+}
+
+let typingEl=null;
+function showTyping(stage){
+  document.getElementById('welcome')?.remove();
+  typingEl=document.createElement('div'); typingEl.className='msg-row'; typingEl.id='typing';
+  typingEl.innerHTML=`<div class="avatar bot">${BOT_SVG}</div><div><div class="typing-card"><div class="typing-stage" id="t-stage">${stage}</div><div class="dots"><span></span><span></span><span></span></div></div></div>`;
+  msgsEl.appendChild(typingEl); msgsEl.scrollTop=msgsEl.scrollHeight;
+}
+function setStage(t){const e=document.getElementById('t-stage');if(e)e.textContent=t;}
+function rmTyping(){typingEl?.remove();typingEl=null;}
+
+async function sendMsg() {
+  if (isLoading) return;
+  const text = qEl.value.trim();
+  if (!text) return;
+  qEl.value = ''; qEl.style.height = 'auto';
+  if (detectCommand(text)) { showWelcome(); return; }
+
+  appendUser(text);
+  chatHistory.push({ role:'user', content:text });
+  isLoading = true; sendBtn.disabled = true;
+
+  const looksLikeKBQuery = text.trim().split(' ').length >= 3 ||
+    /\b(how|what|where|when|why|create|add|configure|setup|enable|process|generate|print|view|delete|edit|manage|transfer|assign|report|gst|pos|grc|po|jv|ewb|grn|stock|purchase|invoice|payment|user|role)\b/i.test(text);
+  showTyping(looksLikeKBQuery ? 'Searching Knowledge Base…' : 'Thinking…');
+
+  // ── Stream via fetch POST ─────────────────────────────────────────────────
+  let streamRow=null, contentEl=null, fullText='', metaDone=false, isDone=false;
+
+  function ensureBubble() {
+    if (streamRow) return;
+    rmTyping();
+    streamRow = document.createElement('div');
+    streamRow.className = 'msg-row bot';
+    streamRow.innerHTML = `<div class="avatar bot">${BOT_SVG}</div>
+      <div class="stream-wrap">
+        <div class="badge-bar" id="stream-badges-${Date.now()}"></div>
+        <div class="acard from-kb stream-card"><div class="stream-body"></div></div>
+      </div>`;
+    msgsEl.appendChild(streamRow);
+    contentEl = streamRow.querySelector('.stream-body');
+    setTimeout(()=>streamRow.scrollIntoView({behavior:'smooth',block:'start'}),60);
+  }
+
+  function handleMeta(d) {
+    ensureBubble();
+    metaDone = true;
+    const badgeBar = streamRow.querySelector('.badge-bar');
+    if (badgeBar) {
+      const mainBadge = (d.sources&&d.sources.length>0) ? `<span class="badge green">✓ Ginesys One Wiki</span>` : '';
+      const srcBadges = (d.sources||[]).slice(0,4).map(s=>`<a class="badge blue" href="${s.url}" target="_blank">📄 ${esc(s.title||'Article')}</a>`).join('');
+      if(d.fromCache) badgeBar.innerHTML=`<span class="badge" style="background:#fef3c7;color:#92400e;border-color:#fde68a">⚡ Instant (cached)</span>${srcBadges}`;
+      else badgeBar.innerHTML = mainBadge + srcBadges;
+    }
+    // Images
+    if (d.fromKB && d.images && d.images.length > 0) {
+      const relevantImgs = d.images.filter(img=>(img.relevance||0)>5).slice(0,3);
+      if (relevantImgs.length > 0) {
+        const ssDiv = document.createElement('div');
+        ssDiv.className = 'screenshots';
+        ssDiv.innerHTML = `<div class="ss-title">Screenshots from KB</div><div class="ss-grid">${
+          relevantImgs.map(img=>{
+            const cap=(img.caption||'').replace(/^image\d[\d\s._-]*/i,'').replace(/\.(png|jpg|jpeg|gif|webp)$/i,'').replace(/[-_]+/g,' ').trim()||img.pageTitle||'Screenshot';
+            return `<div class="ss-card" onclick="openLB('${img.proxyUrl}','${esc(cap)}')">
+              <img class="ss-img" src="${img.proxyUrl}" alt="${esc(cap)}" loading="lazy" onerror="this.closest('.ss-card').style.display='none'"/>
+              <div class="ss-cap">${esc(cap)}</div></div>`;
+          }).join('')
+        }</div>`;
+        streamRow.querySelector('.stream-wrap').insertBefore(ssDiv, streamRow.querySelector('.stream-card'));
+      }
+    }
+    // Videos
+    if (d.fromKB && d.videos && d.videos.length > 0) {
+      const vidDiv = document.createElement('div');
+      vidDiv.className = 'vid-section';
+      vidDiv.innerHTML = `<div class="vid-title">VIDEOS FROM KB</div>${
+        d.videos.slice(0,2).map(vid=>{
+          const cap=(vid.caption||'Video').replace(/[-_]+/g,' ').trim();
+          if(vid.type==='youtube'&&vid.videoId){
+            const thumb=`https://img.youtube.com/vi/${vid.videoId}/hqdefault.jpg`;
+            return `<div class="vid-card"><div class="vid-thumb" style="cursor:pointer" onclick="this.innerHTML='<iframe width=100% height=200 src=https://www.youtube.com/embed/${vid.videoId}?autoplay=1 frameborder=0 allowfullscreen allow=autoplay></iframe>'">
+              <img class="vid-thumb-img" src="${thumb}" onerror="this.style.display='none'"/>
+              <div class="vid-play">▶</div></div>
+              <div class="vid-info"><div class="vid-type">YOUTUBE</div>${esc(cap)}</div></div>`;
+          }
+          return `<div class="vid-card"><div class="vid-info"><div class="vid-type">VIDEO</div>${esc(cap)}</div></div>`;
+        }).join('')
+      }`;
+      streamRow.querySelector('.stream-wrap').appendChild(vidDiv);
+    }
+  }
+
+  // Word buffer for controlled render speed
+  let wordBuffer = [], renderTimer = null;
+  let userScrolledUp = false;
+  const onUserScroll = () => {
+    const dist = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight;
+    userScrolledUp = dist > 80; // user scrolled up more than 80px
+  };
+  msgsEl.addEventListener('scroll', onUserScroll, { passive:true });
+
+  function flushWords() {
+    if (!wordBuffer.length) { renderTimer=null; return; }
+    const batch = wordBuffer.splice(0, 2).join('');
+    fullText += batch;
+    if (contentEl) {
+      contentEl.innerHTML = md(fullText);
+      // Only auto-scroll if user hasn't manually scrolled up
+      if (!userScrolledUp) msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+    renderTimer = setTimeout(flushWords, 30);
+  }
+
+  function handleChunk(text) {
+    ensureBubble();
+    // Push chars into buffer
+    wordBuffer.push(...text.split(''));
+    if (!renderTimer) flushWords();
+  }
+
+  function handleDone(d) {
+    isDone = true;
+    msgsEl.removeEventListener('scroll', onUserScroll);
+    // Flush any remaining buffered text immediately
+    if (wordBuffer.length) {
+      if (renderTimer) clearTimeout(renderTimer);
+      fullText += wordBuffer.join('');
+      wordBuffer = [];
+      if (contentEl) contentEl.innerHTML = md(fullText);
+    }
+    chatHistory.push({ role:'assistant', content:fullText });
+    // Feedback buttons
+    if (streamRow) {
+      const fbDiv = document.createElement('div');
+      fbDiv.className = 'feedback-row';
+      const qEscaped = esc(text.replace(/'/g,"\'"));
+      fbDiv.innerHTML = `<span class="fb-label">Was this helpful?</span>
+        <button class="fb-btn" onclick="sendFeedback(this,'up','${qEscaped}')">👍</button>
+        <button class="fb-btn" onclick="sendFeedback(this,'down','${qEscaped}')">👎</button>`;
+      streamRow.querySelector('.stream-wrap').appendChild(fbDiv);
+    }
+    // Related questions
+    if (d.related && d.related.length > 0 && streamRow) {
+      const relDiv = document.createElement('div');
+      relDiv.className = 'related-qs';
+      relDiv.innerHTML = '<div class="related-label">You might also ask:</div>' +
+        d.related.map(rq=>`<button class="related-btn" onclick="askRelated(this)">${esc(rq)}</button>`).join('');
+      streamRow.querySelector('.stream-wrap').appendChild(relDiv);
+    }
+    isLoading=false; sendBtn.disabled=false; qEl.focus();
+  }
+
+  function handleAnswer(d) {
+    // Casual chat — non-streaming full response
+    rmTyping();
+    appendBot(d.text||d.answer, false, [], [], [], true);
+    chatHistory.push({ role:'assistant', content:d.text||d.answer });
+    isDone = true;
+    isLoading=false; sendBtn.disabled=false; qEl.focus();
+  }
+
+  function handleError(msg) {
+    isDone = true;
+    rmTyping();
+    if (!fullText) {
+      const errDiv = document.createElement('div');
+      errDiv.className = 'err-card';
+      errDiv.textContent = '⚠️ ' + msg;
+      msgsEl.appendChild(errDiv);
+    }
+    isLoading=false; sendBtn.disabled=false; qEl.focus();
+  }
+
+  try {
+    const resp = await fetch(window.location.origin + '/api/ask-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question:text, history:chatHistory.slice(-8), lang:getLangInstruction() }),
+    });
+
+    if (!resp.ok) throw new Error('Server error: ' + resp.status);
+    if (!resp.body) throw new Error('Streaming not supported');
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      // Parse SSE events from buffer
+      const parts = buf.split('\n\n');
+      buf = parts.pop(); // keep incomplete last part
+
+      for (const part of parts) {
+        let eventType = 'message', dataStr = '';
+        for (const line of part.split('\n')) {
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+          else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
+        }
+        if (!dataStr) continue;
+        try {
+          const data = JSON.parse(dataStr);
+          if      (eventType === 'meta')   handleMeta(data);
+          else if (eventType === 'chunk')  handleChunk(data.text || '');
+          else if (eventType === 'done')   handleDone(data);
+          else if (eventType === 'answer') handleAnswer(data);
+          else if (eventType === 'error')  handleError(data.message || 'Unknown error');
+        } catch(e) {}
+      }
+    }
+    if (!isDone) handleDone({ related:[] });
+
+  } catch(err) {
+    handleError(err.message);
+    chatHistory.pop();
+  }
+}
+
+function openLB(src,cap){document.getElementById('lb-img').src=src;document.getElementById('lb-cap').textContent=cap;document.getElementById('lightbox').classList.add('open');}
+function closeLB(){document.getElementById('lightbox').classList.remove('open');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLB();});
+
+  // ── Related question click ──────────────────────────────────────────────────
+  function askRelated(btn) {
+    const q = btn.textContent.trim();
+    qEl.value = q;
+    sendMsg();
+  }
+
+  // ── Feedback submit ─────────────────────────────────────────────────────────
+  async function sendFeedback(btn, rating, question) {
+    const row = btn.closest('.feedback-row');
+    try {
+      await fetch(window.location.origin + '/api/feedback', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({question, rating, comment:''}),
+      });
+      row.innerHTML = `<span style="color:#16a34a;font-size:12px">✅ Thanks for your feedback!</span>`;
+    } catch(e) {
+      row.innerHTML = `<span style="color:#dc2626;font-size:12px">Could not submit feedback</span>`;
+    }
+  }
+
+  // ── Voice input ─────────────────────────────────────────────────────────────
+  let recognition = null;
+  function toggleVoice() {
+    const btn = document.getElementById('voice-btn');
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      alert('Voice input not supported in this browser. Try Chrome.');
+      return;
+    }
+    if (recognition) {
+      recognition.stop(); recognition = null;
+      btn.textContent = '🎤'; btn.style.color = '';
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SR();
+    recognition.lang = 'en-IN';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.onstart  = () => { btn.textContent='🔴'; btn.style.color='#dc2626'; };
+    recognition.onresult = e => {
+      let interim='', final='';
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        if(e.results[i].isFinal) final+=e.results[i][0].transcript;
+        else interim+=e.results[i][0].transcript;
+      }
+      qEl.value = final||interim;
+    };
+    recognition.onend = () => {
+      recognition=null; btn.textContent='🎤'; btn.style.color='';
+      if(qEl.value.trim()) sendMsg();
+    };
+    recognition.onerror = () => { recognition=null; btn.textContent='🎤'; btn.style.color=''; };
+    recognition.start();
+  }
+
+  // ── Language system ──────────────────────────────────────────────────────────
+  let currentLang = 'en';
+
+  const LANG_NAMES = {
+    en: 'English', hi: 'Hindi (हिंदी)', kn: 'Kannada (ಕನ್ನಡ)',
+    ta: 'Tamil (தமிழ்)', te: 'Telugu (తెలుగు)',
+    ml: 'Malayalam (മലയാളം)', bn: 'Bengali (বাংলা)',
+  };
+
+  const LANG_PLACEHOLDERS = {
+    en: 'Ask anything about Ginesys ERP — PO, GST, POS, GRC, JV, Stock Transfer, Users, Reports…',
+    hi: 'Ginesys ERP के बारे में कुछ भी पूछें — PO, GST, POS, GRC, स्टॉक ट्रांसफर…',
+    kn: 'Ginesys ERP ಬಗ್ಗೆ ಏನಾದರೂ ಕೇಳಿ — PO, GST, POS, GRC, ಸ್ಟಾಕ್ ಟ್ರಾನ್ಸ್ಫರ್…',
+    ta: 'Ginesys ERP பற்றி எதுவும் கேளுங்கள் — PO, GST, POS, GRC, ஸ்டாக் டிரான்ஸ்ஃபர்…',
+    te: 'Ginesys ERP గురించి ఏదైనా అడగండి — PO, GST, POS, GRC, స్టాక్ ట్రాన్స్ఫర్…',
+    ml: 'Ginesys ERP-നെ കുറിച്ച് എന്തും ചോദിക്കൂ — PO, GST, POS, GRC, സ്റ്റോക്ക് ട്രാൻസ്ഫർ…',
+    bn: 'Ginesys ERP সম্পর্কে যেকোনো কিছু জিজ্ঞাসা করুন — PO, GST, POS, GRC, স্টক ট্রান্সফার…',
+  };
+
+  const LANG_VOICE = {
+    en:'en-IN', hi:'hi-IN', kn:'kn-IN', ta:'ta-IN', te:'te-IN', ml:'ml-IN', bn:'bn-IN',
+  };
+
+  function setLang(btn, lang) {
+    currentLang = lang;
+    // Update buttons
+    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Update placeholder
+    qEl.placeholder = LANG_PLACEHOLDERS[lang] || LANG_PLACEHOLDERS.en;
+    // Update voice recognition language
+    if (recognition) { recognition.stop(); recognition = null; }
+    // Notify user
+    if (lang !== 'en') {
+      const note = document.createElement('div');
+      note.style.cssText = 'text-align:center;padding:8px;font-size:12px;color:#6366f1;background:#eef2ff;border-radius:8px;margin:8px 20px';
+      note.innerHTML = `🌐 Language set to <strong>${LANG_NAMES[lang]}</strong> — answers will now be in ${LANG_NAMES[lang].split(' ')[0]}`;
+      msgsEl.appendChild(note);
+      setTimeout(()=>note.scrollIntoView({behavior:'smooth',block:'start'}),60);
+    }
+    qEl.focus();
+  }
+
+  // Inject language instruction into every query
+  function getLangInstruction() {
+    if (currentLang === 'en') return '';
+    const map = {
+      hi: 'IMPORTANT: Respond ENTIRELY in Hindi (हिंदी). Use Devanagari script. Keep ERP terms like PO, GRC, GST in English but explain everything else in Hindi.',
+      kn: 'IMPORTANT: Respond ENTIRELY in Kannada (ಕನ್ನಡ). Use Kannada script. Keep ERP terms like PO, GRC, GST in English but explain everything else in Kannada.',
+      ta: 'IMPORTANT: Respond ENTIRELY in Tamil (தமிழ்). Use Tamil script. Keep ERP terms like PO, GRC, GST in English but explain everything else in Tamil.',
+      te: 'IMPORTANT: Respond ENTIRELY in Telugu (తెలుగు). Use Telugu script. Keep ERP terms like PO, GRC, GST in English but explain everything else in Telugu.',
+      ml: 'IMPORTANT: Respond ENTIRELY in Malayalam (മലയാളം). Use Malayalam script. Keep ERP terms like PO, GRC, GST in English but explain everything else in Malayalam.',
+      bn: 'IMPORTANT: Respond ENTIRELY in Bengali (বাংলা). Use Bengali script. Keep ERP terms like PO, GRC, GST in English but explain everything else in Bengali.',
+    };
+    return map[currentLang] || '';
+  }
+</script>
+</body>
+</html>

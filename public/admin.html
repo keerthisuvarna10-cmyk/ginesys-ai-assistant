@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ginesys AI — Admin Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f1f5f9;color:#1e293b}
+.topbar{background:#0f172a;color:#fff;padding:0 28px;height:56px;display:flex;align-items:center;gap:16px}
+.topbar h1{font-size:17px;font-weight:700}
+.topbar .right{margin-left:auto;display:flex;align-items:center;gap:16px}
+.topbar a{color:#60a5fa;font-size:13px;text-decoration:none}
+.topbar a:hover{color:#93c5fd}
+#last-updated{font-size:12px;color:#94a3b8}
+.refresh-btn{background:#6366f1;color:#fff;border:none;padding:6px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.refresh-btn:hover{background:#4f46e5}
+.content{max-width:1280px;margin:24px auto;padding:0 20px}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+@media(max-width:900px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+.stat-card{background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:20px 22px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.stat-card .label{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.stat-card .num{font-size:38px;font-weight:800;color:#0f172a;line-height:1}
+.stat-card .sub{font-size:12px;color:#94a3b8;margin-top:5px}
+.stat-card.green .num{color:#16a34a}
+.stat-card.blue  .num{color:#2563eb}
+.stat-card.amber .num{color:#d97706}
+.stat-card.purple .num{color:#7c3aed}
+
+/* Cards */
+.card{background:#fff;border-radius:14px;border:1px solid #e2e8f0;padding:20px 24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-head h2{font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:9px 12px;background:#f8fafc;color:#475569;font-weight:600;border-bottom:2px solid #e2e8f0;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+td{padding:9px 12px;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f8fafc}
+.bar{height:5px;background:#e0e7ff;border-radius:3px;margin-top:5px;overflow:hidden;min-width:80px}
+.bar-fill{height:100%;background:linear-gradient(90deg,#6366f1,#8b5cf6);border-radius:3px;transition:width .5s ease}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700}
+.badge.up{background:#dcfce7;color:#16a34a}
+.badge.down{background:#fee2e2;color:#dc2626}
+.badge.ok{background:#dbeafe;color:#1d4ed8}
+.empty{color:#94a3b8;font-size:13px;padding:20px 0;text-align:center;font-style:italic}
+
+/* KB info */
+.kb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.kb-item{background:#f8fafc;border-radius:10px;padding:14px;border:1px solid #e2e8f0;text-align:center}
+.kb-item .kb-num{font-size:24px;font-weight:800;color:#2563eb}
+.kb-item .kb-lbl{font-size:11px;color:#64748b;margin-top:3px;text-transform:uppercase;letter-spacing:.3px}
+
+/* Zero state */
+.zero-state{text-align:center;padding:40px 20px;color:#94a3b8}
+.zero-state .icon{font-size:40px;margin-bottom:12px}
+.zero-state h3{font-size:16px;font-weight:600;color:#475569;margin-bottom:8px}
+.zero-state p{font-size:13px;line-height:1.6}
+.zero-state code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;color:#374151}
+
+.error-banner{background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#dc2626;display:none}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div style="font-size:10px;color:#64748b;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">Ginesys</div>
+    <h1>AI Assistant — Admin Dashboard</h1>
+  </div>
+  <div class="right">
+    <span id="last-updated">Loading...</span>
+    <button class="refresh-btn" onclick="load()">↻ Refresh</button>
+    <a href="/">← Back to Chat</a>
+  </div>
+</div>
+
+<div class="content">
+
+  <div class="error-banner" id="error-banner"></div>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card blue">
+      <div class="label">Total Questions</div>
+      <div class="num" id="s-total">—</div>
+      <div class="sub" id="s-started">since server start</div>
+    </div>
+    <div class="stat-card green">
+      <div class="label">Cached (Instant)</div>
+      <div class="num" id="s-cached">—</div>
+      <div class="sub" id="s-cache-rate">—% of all queries</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="label">Feedback</div>
+      <div class="num" id="s-fb">—</div>
+      <div class="sub" id="s-fb-sub">👍 — · 👎 —</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="label">Cache Size</div>
+      <div class="num" id="s-cachesize">—</div>
+      <div class="sub">answers cached in memory</div>
+    </div>
+  </div>
+
+  <!-- KB Status -->
+  <div class="card">
+    <div class="card-head"><h2>Knowledge Base Status</h2></div>
+    <div class="kb-grid" id="kb-grid">
+      <div class="empty">Loading KB stats...</div>
+    </div>
+  </div>
+
+  <!-- Daily activity -->
+  <div class="card">
+    <div class="card-head"><h2>Daily Activity</h2></div>
+    <div id="daily-wrap">
+      <div class="zero-state">
+        <div class="icon">📊</div>
+        <h3>No activity yet</h3>
+        <p>Questions will appear here once users start asking.<br>Try asking a question in the <a href="/" style="color:#6366f1">chat →</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top questions -->
+  <div class="card">
+    <div class="card-head"><h2>Top Questions Asked</h2></div>
+    <div id="top-wrap">
+      <div class="zero-state">
+        <div class="icon">❓</div>
+        <h3>No questions yet</h3>
+        <p>Top questions will appear after users start chatting.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feedback -->
+  <div class="card">
+    <div class="card-head"><h2>Recent Feedback</h2></div>
+    <div id="fb-wrap">
+      <div class="zero-state">
+        <div class="icon">💬</div>
+        <h3>No feedback yet</h3>
+        <p>Feedback from 👍/👎 buttons will appear here.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function load() {
+  document.getElementById('last-updated').textContent = 'Refreshing...';
+  const banner = document.getElementById('error-banner');
+  banner.style.display = 'none';
+
+  let d;
+  try {
+    const r = await fetch('/api/admin');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    d = await r.json();
+  } catch(e) {
+    banner.textContent = '⚠️ Could not load admin data — is the server running? Error: ' + e.message;
+    banner.style.display = 'block';
+    document.getElementById('last-updated').textContent = 'Error';
+    return;
+  }
+
+  // Stats
+  const total   = d.totalQueries || 0;
+  const cached  = d.totalCached  || 0;
+  const cacheRate = total > 0 ? Math.round(cached/total*100) : 0;
+
+  document.getElementById('s-total').textContent     = total.toLocaleString();
+  document.getElementById('s-cached').textContent    = cached.toLocaleString();
+  document.getElementById('s-cache-rate').textContent = `${cacheRate}% of all queries`;
+  document.getElementById('s-fb').textContent        = (d.feedbackCount||0).toLocaleString();
+  document.getElementById('s-fb-sub').textContent    = `👍 ${d.upCount||0} · 👎 ${d.downCount||0}`;
+  document.getElementById('s-cachesize').textContent = (d.cacheSize||0).toLocaleString();
+
+  if (d.startedAt) {
+    const st = new Date(d.startedAt);
+    document.getElementById('s-started').textContent = 'since ' + st.toLocaleString();
+  }
+
+  // KB Status
+  const kb = d.kb || {};
+  const yt = d.youtube || {};
+  document.getElementById('kb-grid').innerHTML = `
+    <div class="kb-item"><div class="kb-num">${(kb.totalPages||0).toLocaleString()}</div><div class="kb-lbl">Articles</div></div>
+    <div class="kb-item"><div class="kb-num">${(kb.totalImages||0).toLocaleString()}</div><div class="kb-lbl">Images</div></div>
+    <div class="kb-item"><div class="kb-num">${(kb.totalVideos||0).toLocaleString()}</div><div class="kb-lbl">KB Videos</div></div>
+    <div class="kb-item"><div class="kb-num">${(yt.totalVideos||0).toLocaleString()}</div><div class="kb-lbl">YouTube Videos</div></div>
+    <div class="kb-item"><div class="kb-num">${(kb.spaces||[]).length||0}</div><div class="kb-lbl">Spaces</div></div>
+    <div class="kb-item"><div class="kb-num" style="font-size:14px;margin-top:4px">${kb.loaded?'<span style="color:#16a34a">✅ Online</span>':'<span style="color:#dc2626">❌ Not loaded</span>'}</div><div class="kb-lbl">Status</div></div>
+  `;
+
+  // Daily stats
+  const days = d.dailyStats || [];
+  if (days.length === 0) {
+    document.getElementById('daily-wrap').innerHTML = `<div class="zero-state"><div class="icon">📊</div><h3>No activity yet</h3><p>Questions will show here after users start asking. <a href="/" style="color:#6366f1">Go chat →</a></p></div>`;
+  } else {
+    document.getElementById('daily-wrap').innerHTML = `
+      <table>
+        <thead><tr><th>Date</th><th>Questions</th><th>Cached</th><th>Cache Rate</th></tr></thead>
+        <tbody>${days.slice(0,7).map(([date,stats]) => {
+          const rate = stats.queries ? Math.round((stats.cached||0)/stats.queries*100) : 0;
+          return `<tr>
+            <td><strong>${date}</strong></td>
+            <td>${stats.queries||0}</td>
+            <td>${stats.cached||0}</td>
+            <td><div>${rate}%</div><div class="bar"><div class="bar-fill" style="width:${rate}%"></div></div></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+  }
+
+  // Top questions
+  const topQ = d.topQueries || [];
+  if (topQ.length === 0) {
+    document.getElementById('top-wrap').innerHTML = `<div class="zero-state"><div class="icon">❓</div><h3>No questions yet</h3><p>Top questions appear after users start chatting.</p></div>`;
+  } else {
+    const maxCount = topQ[0]?.count || 1;
+    document.getElementById('top-wrap').innerHTML = `
+      <table>
+        <thead><tr><th>#</th><th>Question</th><th>Count</th><th>Popularity</th></tr></thead>
+        <tbody>${topQ.slice(0,20).map((q,i) => {
+          const pct = Math.round(q.count/maxCount*100);
+          return `<tr>
+            <td style="color:#94a3b8;width:40px">${i+1}</td>
+            <td>${esc(q.query)}</td>
+            <td><strong>${q.count}</strong></td>
+            <td style="min-width:120px"><div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+  }
+
+  // Feedback
+  const fb = (d.recentFeedback||[]).slice().reverse().slice(0,20);
+  if (fb.length === 0) {
+    document.getElementById('fb-wrap').innerHTML = `<div class="zero-state"><div class="icon">💬</div><h3>No feedback yet</h3><p>👍/👎 ratings from users appear here.</p></div>`;
+  } else {
+    document.getElementById('fb-wrap').innerHTML = `
+      <table>
+        <thead><tr><th>Time</th><th>Rating</th><th>Question</th></tr></thead>
+        <tbody>${fb.map(f => `<tr>
+          <td style="white-space:nowrap;color:#94a3b8">${new Date(f.ts).toLocaleString()}</td>
+          <td><span class="badge ${f.rating==='up'?'up':'down'}">${f.rating==='up'?'👍 Helpful':'👎 Not helpful'}</span></td>
+          <td>${esc(f.question||'')}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+  }
+
+  document.getElementById('last-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+}
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

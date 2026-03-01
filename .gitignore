@@ -1,0 +1,17 @@
+# Secrets — NEVER commit
+.env
+
+# Generated data — large file, regenerate via crawl
+data/kb-index.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Logs
+logs/
+*.log

@@ -1,0 +1,194 @@
+# Ginesys One Knowledge Base Assistant — v2.0
+
+AI-powered assistant for the Ginesys ERP Knowledge Base. Crawls the **entire** Confluence space, indexes all articles, and answers questions using Claude AI with exact KB content and screenshots.
+
+---
+
+## Architecture
+
+```
+Browser  ──→  Node.js Server  ──→  Anthropic Claude API
+                   │
+                   ├──→  /data/kb-index.json  (your full KB, crawled once)
+                   └──→  Atlassian Confluence REST API  (for crawling + images)
+```
+
+- **No external packages needed** — pure Node.js built-ins only
+- **BM25-style search** over all KB articles in memory
+- **Image proxy** — serves Confluence screenshots through your server (no CORS issues)
+- **Production-ready** — env vars, proper error handling, no secrets in frontend
+
+---
+
+## Quick Setup (Local)
+
+### 1. Prerequisites
+- Node.js 18 or higher
+- An Atlassian account with access to ginesysone.atlassian.net
+- An Anthropic API key
+
+### 2. Configure environment
+```bash
+cp .env.example .env
+```
+Edit `.env` and fill in:
+```env
+ANTHROPIC_API_KEY=sk-ant-api03-...
+ATLASSIAN_EMAIL=your@email.com
+ATLASSIAN_API_TOKEN=your_atlassian_token
+```
+
+**Get your Atlassian API token:**
+1. Go to https://id.atlassian.com/manage-profile/security/api-tokens
+2. Click **Create API token**
+3. Copy and paste into `.env`
+
+### 3. Crawl the Knowledge Base (first time)
+```bash
+node scripts/crawl-kb.js
+```
+This fetches **all pages** from the Ginesys Confluence space and saves them to `data/kb-index.json`.
+- Takes 2–5 minutes depending on KB size
+- Run again whenever the KB is updated
+
+### 4. Start the server
+```bash
+npm start
+```
+Open http://localhost:3000
+
+---
+
+## Deployment (Production Hosting)
+
+### Option A — Railway (Easiest, Free tier available)
+
+1. Push this folder to a GitHub repo
+2. Go to https://railway.app → New Project → Deploy from GitHub
+3. Set environment variables in Railway dashboard (same as `.env`)
+4. **Important:** The `data/kb-index.json` file must be present. Either:
+   - Commit it to your repo after crawling locally, OR
+   - Hit the crawl endpoint after deploy: `POST /api/crawl` with `{"secret":"your_CRAWL_SECRET"}`
+
+### Option B — Render
+
+1. Create a new **Web Service** on https://render.com
+2. Connect your GitHub repo
+3. Build command: `npm run crawl` (crawls KB on deploy)
+4. Start command: `npm start`
+5. Set all env vars in Render dashboard
+
+### Option C — Any VPS (Ubuntu/Debian)
+
+```bash
+# Install Node.js 18+
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Clone / upload your files
+cd /var/www/ginesys-kb
+
+# Set up environment
+cp .env.example .env
+nano .env  # fill in your keys
+
+# Crawl the KB
+node scripts/crawl-kb.js
+
+# Start with PM2 (keeps running after logout)
+npm install -g pm2
+pm2 start npm --name "ginesys-kb" -- start
+pm2 save
+pm2 startup
+
+# Optional: nginx reverse proxy
+# proxy_pass http://localhost:3000;
+```
+
+---
+
+## Keeping the KB Fresh
+
+The index is a snapshot. To keep it up to date:
+
+**Manual re-crawl:**
+```bash
+node scripts/crawl-kb.js
+```
+
+**Via API (e.g. from a cron job or CI/CD):**
+```bash
+curl -X POST https://your-domain.com/api/crawl \
+  -H "Content-Type: application/json" \
+  -d '{"secret":"your_CRAWL_SECRET"}'
+```
+
+**Cron job example (weekly re-crawl):**
+```cron
+0 2 * * 0 cd /var/www/ginesys-kb && node scripts/crawl-kb.js >> logs/crawl.log 2>&1
+```
+
+---
+
+## API Reference
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Chat UI |
+| `/api/ask` | POST | Ask a question |
+| `/api/status` | GET | Server health + KB stats |
+| `/api/crawl` | POST | Re-crawl KB (requires secret) |
+| `/api/proxy-image` | GET | Proxy Atlassian images |
+
+**POST /api/ask**
+```json
+{
+  "question": "How do I create a purchase order?",
+  "history": []
+}
+```
+Returns:
+```json
+{
+  "answer": "## Creating a Purchase Order\n...",
+  "sources": [{ "title": "Purchase Order", "url": "...", "score": 42 }],
+  "images": [{ "proxyUrl": "/api/proxy-image?url=...", "caption": "PO Form" }],
+  "searchStats": { "articlesFound": 2, "totalIndexed": 847 }
+}
+```
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | ✅ | Your Anthropic API key |
+| `ATLASSIAN_EMAIL` | ✅ | Your Atlassian login email |
+| `ATLASSIAN_API_TOKEN` | ✅ | Atlassian API token |
+| `CONFLUENCE_BASE_URL` | ✅ | `https://ginesysone.atlassian.net` |
+| `CONFLUENCE_SPACE_KEY` | ✅ | `PUB` |
+| `PORT` | — | Default: `3000` |
+| `NODE_ENV` | — | `development` or `production` |
+| `CRAWL_SECRET` | — | Protects `/api/crawl` endpoint |
+
+---
+
+## File Structure
+
+```
+ginesys-kb-assistant/
+├── src/
+│   ├── server.js       ← Main server (routing, AI, image proxy)
+│   └── search.js       ← BM25 search engine over KB index
+├── scripts/
+│   └── crawl-kb.js     ← Crawls full Confluence space
+├── public/
+│   └── index.html      ← Chat UI (single file, no build step)
+├── data/
+│   └── kb-index.json   ← Generated by crawl (gitignore in prod)
+├── .env.example        ← Copy to .env and fill in
+├── .env                ← Your secrets (never commit this!)
+├── package.json
+└── README.md
+```
