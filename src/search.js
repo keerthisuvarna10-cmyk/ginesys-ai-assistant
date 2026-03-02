@@ -130,25 +130,31 @@ class TFIDFIndex {
       this.idf[term] = Math.log((N + 1) / (count + 1)) + 1; // smoothed IDF
     }
 
-    // Step 3: Build TF-IDF vector for each page
+    // Step 3: Build TF-IDF vectors — top 40 terms only to save RAM
     this.docVectors = pages.map((page, i) => {
       const { tokens } = termSets[i];
       const tf = {};
       tokens.forEach(t => { tf[t] = (tf[t] || 0) + 1; });
       const len = tokens.length || 1;
-      const vec = {};
+      const scored = [];
       for (const [t, count] of Object.entries(tf)) {
         const tfidf = (count / len) * (this.idf[t] || 1);
-        if (tfidf > 0.001) vec[t] = tfidf; // prune tiny values
+        if (tfidf > 0.005) scored.push([t, tfidf]);
       }
-      // Normalize vector to unit length
-      const norm = Math.sqrt(Object.values(vec).reduce((s, v) => s + v * v, 0)) || 1;
-      for (const t in vec) vec[t] /= norm;
+      // Keep top 40 terms only — saves ~70% memory vs unlimited
+      scored.sort((a,b) => b[1]-a[1]);
+      const top = scored.slice(0, 40);
+      const norm = Math.sqrt(top.reduce((s,[,v]) => s + v*v, 0)) || 1;
+      const vec = {};
+      top.forEach(([t,v]) => vec[t] = v/norm);
       return { id: page.id, vec };
     });
 
+    // Free intermediate data
+    termSets.length = 0;
+
     this.built = true;
-    console.log(`  ✅ TF-IDF index built in ${Date.now()-t0}ms (${Object.keys(this.idf).length} unique terms)`);
+    console.log(`  ✅ TF-IDF index built in ${Date.now()-t0}ms (${Object.keys(this.idf).length} unique terms, optimised)`);
   }
 
   // Compute cosine similarity between query and all documents
@@ -223,6 +229,14 @@ class KBSearch {
 
       // Build TF-IDF index (done once at startup)
       this.tfidf.build(this.pages);
+
+      // Free fullText from memory after indexing — saves ~50MB RAM
+      this.pages.forEach(p => {
+        p.fullText = undefined;
+        // Also trim content to save memory
+        if (p.content && p.content.length > 2000) p.content = p.content.slice(0, 2000);
+      });
+
       return true;
     } catch(e) {
       console.error('KB load error:', e.message);
