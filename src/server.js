@@ -27,7 +27,7 @@ const {
   ATLASSIAN_EMAIL,
   ATLASSIAN_API_TOKEN,
   CONFLUENCE_BASE_URL = 'https://ginesysone.atlassian.net',
-  MAX_CHARS = 38000,
+  MAX_CHARS = 12000,
 } = process.env;
 
 // Sanitize API key — strip quotes/spaces/newlines that cause header errors
@@ -205,6 +205,11 @@ function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
     });
     res.on('end',()=>{if(!done)onDone();});
     res.on('error',onError);
+  });
+  req.setTimeout(25000, () => {
+    console.error('❌ Claude request timeout after 25s');
+    req.destroy();
+    onError(new Error('Claude API timeout'));
   });
   req.on('error',(e)=>{console.error('❌ Claude req error:',e.message);onError(e);}); req.write(body); req.end();
 }
@@ -542,6 +547,13 @@ const server = http.createServer(async (req,res)=>{
     // Send metadata first so UI shows sources/images while text streams
     send('meta',{fromKB,sources,images,videos,fromCache:false});
 
+    console.log('  [STREAM] Starting Claude stream for:', q.slice(0,50));
+
+    // Heartbeat every 5s to prevent Render proxy timeout
+    const heartbeat = setInterval(()=>{
+      if(!res.writableEnded) res.write(': heartbeat\n\n');
+    }, 5000);
+
     let fullText='', streamDone=false;
     streamClaude(
       system,
@@ -549,6 +561,8 @@ const server = http.createServer(async (req,res)=>{
       (chunk)=>{ fullText+=chunk; send('chunk',{text:chunk}); },
       async()=>{
         if(streamDone)return; streamDone=true;
+        clearInterval(heartbeat);
+        console.log('  [STREAM] Done, text length:', fullText.length);
         send('done',{related:[]});
         res.end();
         // Cache + related questions in background
@@ -564,7 +578,7 @@ const server = http.createServer(async (req,res)=>{
             try{saveCache();}catch{}
           }).catch(()=>{});
       },
-      (err)=>{ send('error',{message:err.message}); res.end(); }
+      (err)=>{ clearInterval(heartbeat); console.log('  [STREAM] Error:',err.message); send('error',{message:err.message}); res.end(); }
     );
     return;
   }
