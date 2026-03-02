@@ -227,15 +227,24 @@ class KBSearch {
       const spaces  = new Set(this.pages.map(p=>p.spaceKey).filter(Boolean)).size;
       console.log(`✅ KB loaded: ${this.pages.length} pages | ${totImgs} images | ${totVids} videos | ${spaces} spaces`);
 
-      // Build TF-IDF index (done once at startup)
-      this.tfidf.build(this.pages);
+      // Build TF-IDF index only if not in memory-constrained env
+      const useTFIDF = process.env.USE_TFIDF !== 'false';
+      if (useTFIDF) {
+        this.tfidf.build(this.pages);
+      } else {
+        console.log('  ⚡ TF-IDF disabled (USE_TFIDF=false) — using keyword search only');
+      }
 
-      // Free fullText from memory after indexing — saves ~50MB RAM
+      // Always free fullText after indexing to save RAM
       this.pages.forEach(p => {
         p.fullText = undefined;
-        // Also trim content to save memory
-        if (p.content && p.content.length > 2000) p.content = p.content.slice(0, 2000);
+        if (p.content && p.content.length > 1500) p.content = p.content.slice(0, 1500);
+        // Also trim images/videos arrays to save memory
+        if (p.images && p.images.length > 10) p.images = p.images.slice(0, 10);
       });
+
+      // Force GC hint
+      if (global.gc) global.gc();
 
       return true;
     } catch(e) {
