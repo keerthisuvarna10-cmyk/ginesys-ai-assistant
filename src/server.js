@@ -449,12 +449,16 @@ const server = http.createServer(async (req,res)=>{
     // SSE headers — flush immediately
     res.writeHead(200,{
       'Content-Type':'text/event-stream',
-      'Cache-Control':'no-cache',
+      'Cache-Control':'no-cache, no-transform',
       'Connection':'keep-alive',
       'Access-Control-Allow-Origin':'*',
       'X-Accel-Buffering':'no',
+      'X-Content-Type-Options':'nosniff',
+      'Transfer-Encoding':'identity',
     });
-    if(req.socket) req.socket.setNoDelay(true);
+    if(req.socket) { req.socket.setNoDelay(true); req.socket.setTimeout(0); }
+    // Force flush on Render's proxy
+    res.flushHeaders();
 
     const send=(event,data)=>{
       try{ res.write('event: '+event+'\ndata: '+JSON.stringify(data)+'\n\n'); }catch{}
@@ -667,7 +671,7 @@ server.on('error', err => {
 server.listen(currentPort,()=>{
   const s=search.getStats(), yt=search.yt?search.yt.getStats():{loaded:false,totalVideos:0};
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log('║  Ginesys AI Assistant  v6.0                      ║');
+  console.log('║  Ginesys AI Assistant  v10.0                     ║');
   console.log('╠══════════════════════════════════════════════════╣');
   console.log(`║  http://localhost:${currentPort}                            ║`);
   console.log(`║  Admin: http://localhost:${currentPort}/admin               ║`);
