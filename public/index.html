@@ -762,14 +762,6 @@ async function sendMsg() {
     if (!resp.ok) throw new Error('Server error: ' + resp.status);
     const data = await resp.json();
 
-    // Simulate streaming from complete response
-    rmTyping();
-    ensureBubble();
-    const words = (data.answer || '').split(' ');
-    for (let i = 0; i < words.length; i++) {
-      wordBuffer.push(words[i] + (i < words.length-1 ? ' ' : ''));
-    }
-    if (!renderTimer) flushWords();
 
     // Render complete response using appendBot
     rmTyping();
@@ -782,7 +774,7 @@ async function sendMsg() {
         const relDiv = document.createElement('div');
         relDiv.className = 'related-questions';
         relDiv.innerHTML = '<div class="related-title">💬 You might also ask:</div>' +
-          data.related.map(q => `<button class="related-btn" onclick="fillQ(this)">${esc(q)}</button>`).join('');
+          data.related.map(rq => `<button class="related-btn" onclick="fillQ(this)">${esc(rq)}</button>`).join('');
         lastRow.appendChild(relDiv);
       }
     }
