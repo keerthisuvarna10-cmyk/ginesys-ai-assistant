@@ -12,7 +12,8 @@ process.on('uncaughtException', err => {
   console.error(err.stack);
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('\n❌ UNHANDLED REJECTION:', reason?.message || reason);
+  console.error('\n❌ UNHANDLED REJECTION (server keeps running):', reason?.message || reason);
+  // Do NOT exit — keep server alive on Render
 });
 const https = require('https');
 const fs    = require('fs');
@@ -171,12 +172,22 @@ async function callClaude(system,messages,maxTokens=512) {
 // ── Claude — streaming (main answers) ────────────────────────────────────────
 function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
   if (!ANTHROPIC_API_KEY) return onError(new Error('ANTHROPIC_API_KEY not configured'));
-  const body=JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTokens,stream:true,system,messages});
+  const body=JSON.stringify({model:'claude-opus-4-6',max_tokens:maxTokens,stream:true,system,messages});
   const req=https.request({
     hostname:'api.anthropic.com',path:'/v1/messages',method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Length':Buffer.byteLength(body)},
   },res=>{
     let buf='',done=false;
+    // Log non-200 responses for debugging
+    if(res.statusCode!==200){
+      let errBody='';
+      res.on('data',c=>errBody+=c.toString());
+      res.on('end',()=>{
+        console.error('❌ Claude API error status:',res.statusCode, errBody.slice(0,200));
+        onError(new Error('Claude API error: '+res.statusCode+' '+errBody.slice(0,100)));
+      });
+      return;
+    }
     res.on('data',chunk=>{
       buf+=chunk.toString();
       const lines=buf.split('\n'); buf=lines.pop();
@@ -195,7 +206,7 @@ function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
     res.on('end',()=>{if(!done)onDone();});
     res.on('error',onError);
   });
-  req.on('error',onError); req.write(body); req.end();
+  req.on('error',(e)=>{console.error('❌ Claude req error:',e.message);onError(e);}); req.write(body); req.end();
 }
 
 // ── System prompts ────────────────────────────────────────────────────────────
