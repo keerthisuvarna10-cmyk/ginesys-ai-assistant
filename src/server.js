@@ -22,12 +22,15 @@ const search = require('./search');
 
 const {
   PORT = 3000,
-  ANTHROPIC_API_KEY,
+  ANTHROPIC_API_KEY: _RAW_KEY,
   ATLASSIAN_EMAIL,
   ATLASSIAN_API_TOKEN,
   CONFLUENCE_BASE_URL = 'https://ginesysone.atlassian.net',
   MAX_CHARS = 38000,
 } = process.env;
+
+// Sanitize API key — strip quotes/spaces/newlines that cause header errors
+const ANTHROPIC_API_KEY = _RAW_KEY ? _RAW_KEY.trim().replace(/^["']+|["']+$/g,'').replace(/[\r\n\t]/g,'') : undefined;
 
 const PUBLIC_DIR  = path.join(__dirname,'..','public');
 const DATA_DIR    = path.join(__dirname,'..','data');
