@@ -752,28 +752,48 @@ async function sendMsg() {
   }
 
   try {
-    const resp = await fetch(window.location.origin + '/api/ask-stream', {
+    // Use non-streaming endpoint for reliability on Render
+    const resp = await fetch(window.location.origin + '/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question:text, history:chatHistory.slice(-8), lang:getLangInstruction() }),
     });
 
     if (!resp.ok) throw new Error('Server error: ' + resp.status);
-    if (!resp.body) throw new Error('Streaming not supported');
+    const data = await resp.json();
 
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    let lastActivity = Date.now();
+    // Simulate streaming from complete response
+    rmTyping();
+    ensureBubble();
+    const words = (data.answer || '').split(' ');
+    for (let i = 0; i < words.length; i++) {
+      wordBuffer.push(words[i] + (i < words.length-1 ? ' ' : ''));
+    }
+    if (!renderTimer) flushWords();
 
-    while (true) {
-      // Timeout: if no data for 30s, abort
-      const readPromise = reader.read();
-      const timeoutPromise = new Promise((_,rej) => setTimeout(()=>rej(new Error('Stream timeout')), 30000));
-      const { done, value } = await Promise.race([readPromise, timeoutPromise]);
-      if (done) break;
-      lastActivity = Date.now();
-      buf += decoder.decode(value, { stream: true });
+    // Render complete response using appendBot
+    rmTyping();
+    appendBot(data.answer || '', data.fromKB, data.sources, data.images, data.videos, data.casual);
+    chatHistory.push({ role:'assistant', content: data.answer || '' });
+    // Show related questions
+    if (data.related && data.related.length > 0) {
+      const lastRow = msgsEl.lastElementChild;
+      if (lastRow) {
+        const relDiv = document.createElement('div');
+        relDiv.className = 'related-questions';
+        relDiv.innerHTML = '<div class="related-title">💬 You might also ask:</div>' +
+          data.related.map(q => `<button class="related-btn" onclick="fillQ(this)">${esc(q)}</button>`).join('');
+        lastRow.appendChild(relDiv);
+      }
+    }
+    isLoading = false; sendBtn.disabled = false; qEl.focus();
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+    return;
+
+    // Dead code below kept for reference
+    const buf_unused = '';
+    while (false) {
+      const buf = buf_unused;
 
       // Parse SSE events from buffer
       const parts = buf.split('\n\n');
