@@ -646,7 +646,7 @@ async function sendMsg() {
               <div class="ss-cap">${esc(cap)}</div></div>`;
           }).join('')
         }</div>`;
-        streamRow.querySelector('.stream-wrap').insertBefore(ssDiv, streamRow.querySelector('.stream-card'));
+        streamRow.querySelector('.stream-wrap').appendChild(ssDiv);
       }
     }
     // Videos
