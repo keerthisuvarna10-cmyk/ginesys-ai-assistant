@@ -59,8 +59,26 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .sb-link-sub{font-size:10px;color:rgba(255,255,255,.25)}
 
 /* CHAT */
-.chat{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
-#messages{flex:1;overflow-y:auto;padding:28px 32px;display:flex;flex-direction:column;gap:24px;min-height:0}
+.chat{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  overflow:hidden;
+  align-items:center; /* CENTER CHAT LIKE CHATGPT */
+}
+
+#messages{
+  flex:1;
+  width:100%;
+  max-width:900px;
+  margin:0 auto;
+  padding:24px 24px 32px;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+  gap:24px;
+}
 
 /* WELCOME */
 .welcome{max-width:520px;margin:4px auto;text-align:center;animation:fadeUp .5s ease}
@@ -73,7 +91,18 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .welcome-hint{font-size:13px;color:var(--text3);margin-top:16px;font-style:italic}
 
 /* MESSAGES */
-.msg-row{display:flex;gap:11px;animation:fadeUp .3s ease}.msg-row.bot>.stream-wrap,.msg-row.bot>.acard{flex:1;min-width:0;max-width:calc(100% - 46px)}
+.msg-row{
+  display:flex;
+  gap:14px;
+  animation:fadeUp .3s ease;
+  width:100%;
+}
+.msg-row.bot>.stream-wrap,
+.msg-row.bot>.acard{
+  flex:1;
+  min-width:0;
+  max-width:calc(100% - 46px);
+}
 .msg-row.user{flex-direction:row-reverse}
 .avatar{width:34px;height:34px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .avatar.bot{background:var(--dark);border:2px solid rgba(106,191,75,.5);padding:4px}
@@ -81,7 +110,15 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .user-bubble{background:var(--dark);color:white;padding:12px 16px;border-radius:13px;border-top-right-radius:3px;font-size:14px;line-height:1.6;font-weight:500;max-width:560px}
 
 /* ANSWER CARD */
-.acard{background:var(--white);border-radius:14px;border-top-left-radius:3px;border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden;max-width:100%;flex:1;min-width:0}
+.acard{
+  background:var(--white);
+  border-radius:14px;
+  border-top-left-radius:3px;
+  border:1px solid var(--border);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+  width:100%;
+}
 .acard-head{display:flex;align-items:center;gap:7px;padding:10px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
 .acard-head.from-kb{background:#f8fafb}
 .acard-head.not-kb{background:var(--amber-bg);border-bottom-color:var(--amber-bd)}
@@ -168,7 +205,15 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .err-card{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:13px 17px;font-size:13px;color:#b91c1c;max-width:600px}
 
 /* INPUT */
-.input-area{padding:12px 32px 18px;border-top:1px solid var(--border);background:var(--white);flex-shrink:0}
+.input-area{
+  width:100%;
+  max-width:900px;
+  margin:0 auto;
+  padding:12px 0 18px;
+  border-top:1px solid var(--border);
+  background:var(--white);
+  flex-shrink:0;
+}
 .input-wrap{display:flex;align-items:flex-end;gap:10px;background:#f7f9fc;border:2px solid var(--border2);border-radius:13px;padding:10px 10px 10px 17px;transition:all .2s}
 .input-wrap:focus-within{border-color:var(--green);background:white;box-shadow:0 0 0 4px rgba(61,174,43,.08)}
 #q{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:14px;line-height:1.55;resize:none;max-height:130px;min-height:24px}
@@ -837,7 +882,7 @@ async function sendMsg() {
     // ── Feedback ──
     const fbDiv = document.createElement('div');
     fbDiv.className = 'feedback-row';
-    const safeQ = text.replace(/\/g,'\\').replace(/'/g,"\'");
+    const safeQ = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     fbDiv.innerHTML = `<span style="font-size:12px;color:#6b7280">Was this helpful?</span>
       <button class="fb-btn" onclick="sendFeedback(this,'up','${safeQ}')">👍</button>
       <button class="fb-btn" onclick="sendFeedback(this,'down','${safeQ}')">👎</button>`;
