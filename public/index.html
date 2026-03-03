@@ -634,7 +634,7 @@ async function sendMsg() {
     }
     // Images
     if (d.fromKB && d.images && d.images.length > 0) {
-      const relevantImgs = d.images.filter(img=>(img.relevance||0)>5).slice(0,3);
+      const relevantImgs = d.images.filter(img=>(img.relevance||0)>15).slice(0,2);
       if (relevantImgs.length > 0) {
         const ssDiv = document.createElement('div');
         ssDiv.className = 'screenshots';
@@ -646,7 +646,7 @@ async function sendMsg() {
               <div class="ss-cap">${esc(cap)}</div></div>`;
           }).join('')
         }</div>`;
-        streamRow.querySelector('.stream-wrap').insertBefore(ssDiv, streamRow.querySelector('.stream-card'));
+        streamRow.querySelector('.stream-wrap').appendChild(ssDiv);
       }
     }
     // Videos
@@ -752,46 +752,37 @@ async function sendMsg() {
   }
 
   try {
-    const resp = await fetch(window.location.origin + '/api/ask-stream', {
+    // POST to /api/ask — reliable non-streaming endpoint
+    const resp = await fetch(window.location.origin + '/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question:text, history:chatHistory.slice(-8), lang:getLangInstruction() }),
     });
 
     if (!resp.ok) throw new Error('Server error: ' + resp.status);
-    if (!resp.body) throw new Error('Streaming not supported');
+    const data = await resp.json();
 
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
+    rmTyping();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
+    // Render answer with sources, images, videos using appendBot
+    appendBot(data.answer || '', data.fromKB, data.sources, data.images, data.videos, data.casual);
+    chatHistory.push({ role:'assistant', content: data.answer || '' });
 
-      // Parse SSE events from buffer
-      const parts = buf.split('\n\n');
-      buf = parts.pop(); // keep incomplete last part
-
-      for (const part of parts) {
-        let eventType = 'message', dataStr = '';
-        for (const line of part.split('\n')) {
-          if (line.startsWith('event: ')) eventType = line.slice(7).trim();
-          else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
-        }
-        if (!dataStr) continue;
-        try {
-          const data = JSON.parse(dataStr);
-          if      (eventType === 'meta')   handleMeta(data);
-          else if (eventType === 'chunk')  handleChunk(data.text || '');
-          else if (eventType === 'done')   handleDone(data);
-          else if (eventType === 'answer') handleAnswer(data);
-          else if (eventType === 'error')  handleError(data.message || 'Unknown error');
-        } catch(e) {}
+    // Show related questions
+    if (data.related && data.related.length > 0) {
+      const lastRow = msgsEl.lastElementChild;
+      if (lastRow) {
+        const relDiv = document.createElement('div');
+        relDiv.className = 'related-questions';
+        relDiv.style.marginTop = '10px';
+        relDiv.innerHTML = '<div class="related-title">💬 You might also ask:</div>' +
+          data.related.map(rq => `<button class="related-btn" onclick="askRelated(this)">${esc(rq)}</button>`).join('');
+        lastRow.appendChild(relDiv);
       }
     }
-    if (!isDone) handleDone({ related:[] });
+
+    isLoading = false; sendBtn.disabled = false; qEl.focus();
+    msgsEl.scrollTop = msgsEl.scrollHeight;
 
   } catch(err) {
     handleError(err.message);
