@@ -240,8 +240,8 @@ function buildCasualPrompt(langInstruction='') {
 
 function buildKBPrompt(results, q, ytResults=[], langInstruction='') {
   if (!results||!results.length) {
-    const langSuffix = langInstruction ? `\n\n${langInstruction}` : '';
-  return `${langInstruction ? langInstruction+'\n\n' : ''}${AI_PERSONA}\n\nNo KB articles found. Answer from Ginesys ERP expertise. Be complete and confident.\n\nQuestion: "${q}"\n\nFormat: ## heading, numbered steps, **bold** UI elements`;
+    const langPrefix2 = langInstruction ? `***${langInstruction}***\n\n` : '';
+  return `${langPrefix2}${AI_PERSONA}\n\nNo KB articles found. Answer from Ginesys ERP expertise. Be complete and confident.\n\nQuestion: "${q}"\n\nFormat: ## heading, numbered steps, **bold** UI elements`;
   }
   const kb = results.map((r,i)=>{
     const crumb=[...(r.ancestors||[]),r.title].join(' › ');
@@ -249,8 +249,8 @@ function buildKBPrompt(results, q, ytResults=[], langInstruction='') {
   }).join('\n\n');
   const yt = (ytResults&&ytResults.length)
     ? '\n\nYOUTUBE:\n'+ytResults.map((v,i)=>`${i+1}. "${v.title}" — ${v.url}`).join('\n') : '';
-  const langSuffix2 = langInstruction ? `\n\n${langInstruction}` : '';
-  return `${langInstruction ? '🌐 LANGUAGE REQUIREMENT: '+langInstruction+'\n\n' : ''}${AI_PERSONA}\n\nKB ARTICLES (${results.length}):\n${'─'.repeat(40)}\n${kb}\n${'─'.repeat(40)}${yt}\n\nQUESTION: "${q}"\n\nINSTRUCTIONS:\n- Detect intent first\n- Use ONLY relevant content (ignore unrelated modules)\n- Combine articles for complete answer\n- Never say "not found"\n- ## sections, numbered steps, **bold** UI labels\n- End with: ## Sources (links)\n${langInstruction ? '\n'+langInstruction : ''}`;
+  const langPrefix = langInstruction ? `***${langInstruction}***\n\nYOU MUST FOLLOW THE ABOVE LANGUAGE INSTRUCTION FOR YOUR ENTIRE RESPONSE.\n\n` : '';
+  return `${langPrefix}${AI_PERSONA}\n\nKB ARTICLES (${results.length}):\n${'─'.repeat(40)}\n${kb}\n${'─'.repeat(40)}${yt}\n\nQUESTION: "${q}"\n\nINSTRUCTIONS:\n- Detect intent first\n- Use ONLY relevant content (ignore unrelated modules)\n- Combine articles for complete answer\n- Never say "not found"\n- ## sections, numbered steps, **bold** UI labels\n- End with: ## Sources (links)\n${langInstruction ? '- '+langInstruction : ''}`;
 }
 
 function buildRelatedPrompt(q, answer) {
