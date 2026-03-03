@@ -623,30 +623,30 @@ const server = http.createServer(async (req,res)=>{
       const sources = results.map(r=>({title:r.title,url:r.url,score:r.score,space:r.spaceKey}));
       const system  = buildKBPrompt(results, q, ytResults, langInstruction);
 
-      // Get answer from Claude (with timeout protection)
+      // Get answer from Claude with timeout protection
       let answer;
       try {
         answer = await Promise.race([
           callClaude(system,[...histMsgs,{role:'user',content:q}],4096),
-          new Promise((_,rej) => setTimeout(()=>rej(new Error('Claude timeout')), 55000))
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('Claude timeout after 55s')),55000))
         ]);
       } catch(e) {
-        console.error('Claude error:', e.message);
-        return jsonRes(res,500,{error:'AI response failed: '+e.message});
+        console.error('Claude answer error:', e.message);
+        return jsonRes(res,500,{error:'AI response failed. Please try again.'});
       }
 
-      // Get related questions (with short timeout — best effort)
+      // Get related questions (8s timeout — best effort)
       let related = [];
       try {
         const relRaw = await Promise.race([
-          callClaude('You are a helpful Ginesys ERP assistant.',[{role:'user',content:buildRelatedPrompt(q,answer)}], 200),
-          new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 8000))
+          callClaude('You are a Ginesys ERP assistant. Return ONLY a JSON array of 3 short follow-up questions.',
+            [{role:'user',content:`Question: "${q}"\nAnswer summary: "${answer.slice(0,200)}"\nReturn JSON array of 3 follow-up questions.`}], 150),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
         ]);
         const parsed = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
-        if(Array.isArray(parsed)) related = parsed.slice(0,4);
-      } catch{}
+        if(Array.isArray(parsed)) related = parsed.slice(0,3);
+      } catch(e){ console.log('Related questions skipped:', e.message); }
 
-      // Cache and respond with everything including related
       cache.set(cacheKey,{answer,fromKB,sources,images,videos,related,ts:Date.now()});
       setImmediate(()=>{ try{saveCache();}catch{} });
       return jsonRes(res,200,{answer,fromKB,sources,images,videos,related,fromCache:false});

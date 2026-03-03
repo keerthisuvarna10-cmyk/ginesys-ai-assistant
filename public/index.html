@@ -209,8 +209,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .related-label{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
 .related-btn{display:inline-block;margin:3px 4px 3px 0;padding:5px 12px;background:#f0f4f8;border:1.5px solid #d1d5db;border-radius:20px;font-size:12px;color:#374151;cursor:pointer;transition:all .15s}
 .related-btn:hover{background:#e0e7ff;border-color:#6366f1;color:#4338ca}
-.fb-btn{background:none;border:1.5px solid #d1d5db;border-radius:8px;padding:3px 8px;cursor:pointer;font-size:15px;transition:all .15s}
+.fb-btn{background:none;border:1.5px solid #d1d5db;border-radius:8px;padding:3px 10px;cursor:pointer;font-size:15px;transition:all .15s;line-height:1}
 .fb-btn:hover{border-color:#6366f1;background:#eef2ff}
+.bubble-casual{max-width:520px;padding:14px 18px;font-size:14px;line-height:1.7;color:var(--text);background:#f9fafb;border-radius:12px}
 /* ── Feedback row ──────────────────── */
 .feedback-row{display:flex;align-items:center;gap:8px;padding:8px 20px 14px;border-top:1px solid var(--border)}
 .fb-label{font-size:12px;color:#9ca3af}
@@ -754,68 +755,63 @@ async function sendMsg() {
   }
 
   try {
-    // POST to /api/ask — reliable non-streaming endpoint
     const resp = await fetch(window.location.origin + '/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question:text, history:chatHistory.slice(-8), lang:getLangInstruction() }),
     });
-
     if (!resp.ok) throw new Error('Server error: ' + resp.status);
     const data = await resp.json();
-
     rmTyping();
-    chatHistory.push({ role:'assistant', content: data.answer || '' });
 
-    const answer = data.answer || '';
-    const fromKB = data.fromKB;
+    const ans     = data.answer || '';
+    const fromKB  = !!data.fromKB;
     const sources = data.sources || [];
-    const images = data.images || [];
-    const videos = data.videos || [];
+    const images  = data.images  || [];
+    const videos  = data.videos  || [];
     const related = data.related || [];
+    chatHistory.push({ role:'assistant', content: ans });
 
-    // Build the response card (without answer text — we'll type it in)
+    // ── Build response card ──
     const row = document.createElement('div');
     row.className = 'msg-row';
 
     if (data.casual) {
-      // Casual: simple bubble with typewriter
-      const bubble = document.createElement('div');
-      bubble.innerHTML = `<div class="avatar bot">${BOT_SVG}</div><div><div class="typing-card" style="max-width:520px;padding:14px 18px;font-size:14px;line-height:1.7;color:var(--text)"></div></div>`;
-      row.appendChild(bubble);
+      row.innerHTML = `<div class="avatar bot">${BOT_SVG}</div><div><div class="bubble-casual"></div></div>`;
       msgsEl.appendChild(row);
-      const target = row.querySelector('.typing-card');
-      await typeWriter(target, answer, true);
+      const target = row.querySelector('.bubble-casual');
+      await typeWriter(target, ans, true);
     } else {
-      // KB answer: full card with badges, sources, images, videos
-      const mainBadge = sources.length > 0
+      const mainBadge = sources.length
         ? `<span class="badge green">✓ Ginesys One Wiki</span>`
         : `<span class="badge green" style="background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe">✦ Ginesys AI</span>`;
-      const srcBadges = sources.map((s,i) => `<a class="badge blue" href="${s.url}" target="_blank">📄 ${esc(s.title||'Article '+(i+1))}</a>`).join('');
+      const srcBadges = sources.map((s,i)=>`<a class="badge blue" href="${s.url}" target="_blank">📄 ${esc(s.title||'Article '+(i+1))}</a>`).join('');
 
       let ssHtml = '';
-      if (fromKB && images.length > 0) {
+      if (fromKB && images.length) {
         const cards = images.map(img => {
           const cap = (img.caption||'').replace(/^image\d[\d\s._-]*/i,'').replace(/\.(png|jpg|jpeg|gif|webp)$/i,'').replace(/[-_]+/g,' ').trim() || img.pageTitle || 'Screenshot';
           return `<div class="ss-card" onclick="openLB('${img.proxyUrl}','${esc(cap)}')">
-            <img class="ss-img" src="${img.proxyUrl}" alt="${esc(cap)}" loading="lazy" onerror="this.closest('.ss-card').style.display='none'"/>
+            <img class="ss-img" src="${img.proxyUrl}" loading="lazy" onerror="this.closest('.ss-card').style.display='none'"/>
             <div class="ss-cap">${esc(cap)}</div></div>`;
         }).join('');
         ssHtml = `<div class="screenshots"><div class="ss-title">📸 Screenshots from KB</div><div class="ss-grid">${cards}</div></div>`;
       }
 
       let vidHtml = '';
-      if (fromKB && videos.length > 0) {
+      if (fromKB && videos.length) {
         const vcards = videos.map(vid => {
-          const cap = (vid.caption||'Video').replace(/^image\d[\d\s_-]*/i,'').replace(/\.(mp4|mov|avi|webm)$/i,'').replace(/[-_]+/g,' ').trim() || 'Video';
+          const cap = (vid.caption||'Video').replace(/[-_]+/g,' ').trim();
           if (vid.type==='youtube' && vid.videoId) {
-            return `<div class="vid-card"><div class="vid-thumb" onclick="this.innerHTML='<iframe width=100% height=140 src=https://www.youtube.com/embed/${vid.videoId}?autoplay=1 frameborder=0 allowfullscreen allow=autoplay></iframe>'">
-              <img class="vid-thumb-img" src="https://img.youtube.com/vi/${vid.videoId}/hqdefault.jpg" onerror="this.style.display='none'"/>
-              <div class="vid-play">▶</div></div>
+            return `<div class="vid-card">
+              <div class="vid-thumb" onclick="this.innerHTML='<iframe width=100% height=140 src=https://www.youtube.com/embed/${vid.videoId}?autoplay=1 frameborder=0 allowfullscreen></iframe>'">
+                <img class="vid-thumb-img" src="https://img.youtube.com/vi/${vid.videoId}/hqdefault.jpg" onerror="this.style.display='none'"/>
+                <div class="vid-play">▶</div></div>
               <div class="vid-info"><div class="vid-type">YouTube</div>${esc(cap)}</div></div>`;
           }
-          return `<div class="vid-card"><div class="vid-thumb" onclick="this.outerHTML='<video controls autoplay style=width:100%><source src=${vid.proxyUrl||vid.url} type=video/mp4></video>'">
-            <div style="text-align:center;padding:20px;color:#888">🎬<br>${esc(cap)}</div></div>
+          return `<div class="vid-card">
+            <div class="vid-thumb" onclick="this.outerHTML='<video controls autoplay style=width:100%><source src=${vid.proxyUrl||vid.url} type=video/mp4></video>'">
+              <div style="text-align:center;padding:20px">🎬<br><small>${esc(cap)}</small></div></div>
             <div class="vid-info"><div class="vid-type">VIDEO</div>${esc(cap)}</div></div>`;
         }).join('');
         vidHtml = `<div class="videos"><div class="vid-title">🎬 Videos from KB</div><div class="vid-grid">${vcards}</div></div>`;
@@ -828,25 +824,26 @@ async function sendMsg() {
         <div class="avatar bot">${BOT_SVG}</div>
         <div class="acard">
           <div class="acard-head ${fromKB?'from-kb':'not-kb'}">${mainBadge}${srcBadges}</div>
-          <div class="abody" id="answer-body-${Date.now()}"></div>
+          <div class="abody"></div>
           ${ssHtml}${vidHtml}${srcFooter}
         </div>`;
       msgsEl.appendChild(row);
 
-      // Type the answer word by word into abody
+      // Type answer word by word into abody
       const abody = row.querySelector('.abody');
-      await typeWriter(abody, answer, false);
+      await typeWriter(abody, ans, false);
     }
 
-    // Feedback row
+    // ── Feedback ──
     const fbDiv = document.createElement('div');
     fbDiv.className = 'feedback-row';
+    const safeQ = text.replace(/\/g,'\\').replace(/'/g,"\'");
     fbDiv.innerHTML = `<span style="font-size:12px;color:#6b7280">Was this helpful?</span>
-      <button class="fb-btn" onclick="sendFeedback(this,'up','${esc(text).replace(/'/g,"\\'")}')">👍</button>
-      <button class="fb-btn" onclick="sendFeedback(this,'down','${esc(text).replace(/'/g,"\\'")}')">👎</button>`;
+      <button class="fb-btn" onclick="sendFeedback(this,'up','${safeQ}')">👍</button>
+      <button class="fb-btn" onclick="sendFeedback(this,'down','${safeQ}')">👎</button>`;
     row.appendChild(fbDiv);
 
-    // Related questions
+    // ── Related questions ──
     if (related.length > 0) {
       const relDiv = document.createElement('div');
       relDiv.className = 'related-qs';
@@ -869,18 +866,17 @@ function closeLB(){document.getElementById('lightbox').classList.remove('open');
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLB();});
 
   // ── Related question click ──────────────────────────────────────────────────
-  // ── Word-by-word typewriter effect ─────────────────────────────────────────
-  async function typeWriter(el, text, isCasual) {
+  // ── typeWriter: word-by-word effect ──────────────────────────────────────────
+  async function typeWriter(el, text, plain) {
     const words = text.split(' ');
-    let displayed = '';
+    let out = '';
     for (let i = 0; i < words.length; i++) {
-      displayed += (i > 0 ? ' ' : '') + words[i];
-      el.innerHTML = isCasual ? displayed : md(displayed);
+      out += (i > 0 ? ' ' : '') + words[i];
+      el.innerHTML = plain ? out : md(out);
       msgsEl.scrollTop = msgsEl.scrollHeight;
-      await new Promise(r => setTimeout(r, 18)); // ~55 words/sec
+      await new Promise(r => setTimeout(r, 20));
     }
-    // Final render with full markdown
-    el.innerHTML = isCasual ? displayed : md(displayed);
+    el.innerHTML = plain ? out : md(out);
   }
 
   function askRelated(btn) {
