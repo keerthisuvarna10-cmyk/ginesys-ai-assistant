@@ -752,7 +752,7 @@ async function sendMsg() {
   }
 
   try {
-    // Use non-streaming endpoint for reliability on Render
+    // POST to /api/ask — reliable non-streaming endpoint
     const resp = await fetch(window.location.origin + '/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -762,53 +762,27 @@ async function sendMsg() {
     if (!resp.ok) throw new Error('Server error: ' + resp.status);
     const data = await resp.json();
 
-
-    // Render complete response using appendBot
     rmTyping();
+
+    // Render answer with sources, images, videos using appendBot
     appendBot(data.answer || '', data.fromKB, data.sources, data.images, data.videos, data.casual);
     chatHistory.push({ role:'assistant', content: data.answer || '' });
+
     // Show related questions
     if (data.related && data.related.length > 0) {
       const lastRow = msgsEl.lastElementChild;
       if (lastRow) {
         const relDiv = document.createElement('div');
         relDiv.className = 'related-questions';
+        relDiv.style.marginTop = '10px';
         relDiv.innerHTML = '<div class="related-title">💬 You might also ask:</div>' +
-          data.related.map(rq => `<button class="related-btn" onclick="fillQ(this)">${esc(rq)}</button>`).join('');
+          data.related.map(rq => `<button class="related-btn" onclick="askRelated(this)">${esc(rq)}</button>`).join('');
         lastRow.appendChild(relDiv);
       }
     }
+
     isLoading = false; sendBtn.disabled = false; qEl.focus();
     msgsEl.scrollTop = msgsEl.scrollHeight;
-    return;
-
-    // Dead code below kept for reference
-    const buf_unused = '';
-    while (false) {
-      const buf = buf_unused;
-
-      // Parse SSE events from buffer
-      const parts = buf.split('\n\n');
-      buf = parts.pop(); // keep incomplete last part
-
-      for (const part of parts) {
-        let eventType = 'message', dataStr = '';
-        for (const line of part.split('\n')) {
-          if (line.startsWith('event: ')) eventType = line.slice(7).trim();
-          else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
-        }
-        if (!dataStr) continue;
-        try {
-          const data = JSON.parse(dataStr);
-          if      (eventType === 'meta')   handleMeta(data);
-          else if (eventType === 'chunk')  handleChunk(data.text || '');
-          else if (eventType === 'done')   handleDone(data);
-          else if (eventType === 'answer') handleAnswer(data);
-          else if (eventType === 'error')  handleError(data.message || 'Unknown error');
-        } catch(e) {}
-      }
-    }
-    if (!isDone) handleDone({ related:[] });
 
   } catch(err) {
     handleError(err.message);
