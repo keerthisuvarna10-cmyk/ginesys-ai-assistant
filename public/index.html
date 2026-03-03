@@ -724,7 +724,7 @@ async function sendMsg() {
       const relDiv = document.createElement('div');
       relDiv.className = 'related-qs';
       relDiv.innerHTML = '<div class="related-label">You might also ask:</div>' +
-        d.related.map(rq=>`<button class="related-btn" onclick="askRelated(this)">${esc(typeof rq==='string'?rq:rq.question||rq.text||JSON.stringify(rq))}</button>`).join('');
+        d.related.map(rq=>`<button class="related-btn" onclick="askRelated(this)">${esc(rq)}</button>`).join('');
       streamRow.querySelector('.stream-wrap').appendChild(relDiv);
     }
     isLoading=false; sendBtn.disabled=false; qEl.focus();
@@ -752,50 +752,52 @@ async function sendMsg() {
   }
 
   try {
-    const resp = await fetch(window.location.origin + '/api/ask', {
+    const resp = await fetch(window.location.origin + '/api/ask-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question:text, history:chatHistory.slice(-8), lang:getLangInstruction() }),
     });
+
     if (!resp.ok) throw new Error('Server error: ' + resp.status);
-    const data = await resp.json();
-    rmTyping();
+    if (!resp.body) throw new Error('Streaming not supported');
 
-    // Show meta (badges, sources)
-    handleMeta({
-      fromKB: data.fromKB,
-      sources: data.sources||[],
-      images: data.images||[],
-      videos: data.videos||[],
-      fromCache: data.fromCache||false
-    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
 
-    // Word-by-word simulation
-    ensureBubble();
-    const words = (data.answer||'').split(' ');
-    let i = 0;
-    function nextWord() {
-      if (i >= words.length) {
-        // Done — flush remaining and finish
-        if (wordBuffer.length) {
-          fullText += wordBuffer.join('');
-          wordBuffer = [];
-          if (contentEl) contentEl.innerHTML = md(fullText);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      // Parse SSE events from buffer
+      const parts = buf.split('\n\n');
+      buf = parts.pop(); // keep incomplete last part
+
+      for (const part of parts) {
+        let eventType = 'message', dataStr = '';
+        for (const line of part.split('\n')) {
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+          else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
         }
-        chatHistory.push({ role:'assistant', content: data.answer||'' });
-        handleDone({ related: data.related||[] });
-        return;
+        if (!dataStr) continue;
+        try {
+          const data = JSON.parse(dataStr);
+          if      (eventType === 'meta')   handleMeta(data);
+          else if (eventType === 'chunk')  handleChunk(data.text || '');
+          else if (eventType === 'done')   handleDone(data);
+          else if (eventType === 'answer') handleAnswer(data);
+          else if (eventType === 'error')  handleError(data.message || 'Unknown error');
+        } catch(e) {}
       }
-      handleChunk(words[i] + (i < words.length-1 ? ' ' : ''));
-      i++;
-      setTimeout(nextWord, 18);
     }
-    nextWord();
+    if (!isDone) handleDone({ related:[] });
 
   } catch(err) {
     handleError(err.message);
     chatHistory.pop();
   }
+}
 
 function openLB(src,cap){document.getElementById('lb-img').src=src;document.getElementById('lb-cap').textContent=cap;document.getElementById('lightbox').classList.add('open');}
 function closeLB(){document.getElementById('lightbox').classList.remove('open');}

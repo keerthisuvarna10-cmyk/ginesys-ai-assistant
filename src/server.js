@@ -12,8 +12,7 @@ process.on('uncaughtException', err => {
   console.error(err.stack);
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('\n❌ UNHANDLED REJECTION (server keeps running):', reason?.message || reason);
-  // Do NOT exit — keep server alive on Render
+  console.error('\n❌ UNHANDLED REJECTION:', reason?.message || reason);
 });
 const https = require('https');
 const fs    = require('fs');
@@ -23,15 +22,12 @@ const search = require('./search');
 
 const {
   PORT = 3000,
-  ANTHROPIC_API_KEY: _RAW_KEY,
+  ANTHROPIC_API_KEY,
   ATLASSIAN_EMAIL,
   ATLASSIAN_API_TOKEN,
   CONFLUENCE_BASE_URL = 'https://ginesysone.atlassian.net',
-  MAX_CHARS = 12000,
+  MAX_CHARS = 38000,
 } = process.env;
-
-// Sanitize API key — strip quotes/spaces/newlines that cause header errors
-const ANTHROPIC_API_KEY = _RAW_KEY ? _RAW_KEY.trim().replace(/^["']+|["']+$/g,'').replace(/[\r\n\t]/g,'') : undefined;
 
 const PUBLIC_DIR  = path.join(__dirname,'..','public');
 const DATA_DIR    = path.join(__dirname,'..','data');
@@ -172,22 +168,12 @@ async function callClaude(system,messages,maxTokens=512) {
 // ── Claude — streaming (main answers) ────────────────────────────────────────
 function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
   if (!ANTHROPIC_API_KEY) return onError(new Error('ANTHROPIC_API_KEY not configured'));
-  const body=JSON.stringify({model:'claude-opus-4-6',max_tokens:maxTokens,stream:true,system,messages});
+  const body=JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTokens,stream:true,system,messages});
   const req=https.request({
     hostname:'api.anthropic.com',path:'/v1/messages',method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Length':Buffer.byteLength(body)},
   },res=>{
     let buf='',done=false;
-    // Log non-200 responses for debugging
-    if(res.statusCode!==200){
-      let errBody='';
-      res.on('data',c=>errBody+=c.toString());
-      res.on('end',()=>{
-        console.error('❌ Claude API error status:',res.statusCode, errBody.slice(0,200));
-        onError(new Error('Claude API error: '+res.statusCode+' '+errBody.slice(0,100)));
-      });
-      return;
-    }
     res.on('data',chunk=>{
       buf+=chunk.toString();
       const lines=buf.split('\n'); buf=lines.pop();
@@ -206,12 +192,7 @@ function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
     res.on('end',()=>{if(!done)onDone();});
     res.on('error',onError);
   });
-  req.setTimeout(25000, () => {
-    console.error('❌ Claude request timeout after 25s');
-    req.destroy();
-    onError(new Error('Claude API timeout'));
-  });
-  req.on('error',(e)=>{console.error('❌ Claude req error:',e.message);onError(e);}); req.write(body); req.end();
+  req.on('error',onError); req.write(body); req.end();
 }
 
 // ── System prompts ────────────────────────────────────────────────────────────
@@ -240,8 +221,8 @@ function buildCasualPrompt(langInstruction='') {
 
 function buildKBPrompt(results, q, ytResults=[], langInstruction='') {
   if (!results||!results.length) {
-    const langPrefix2 = langInstruction ? `***${langInstruction}***\n\n` : '';
-  return `${langPrefix2}${AI_PERSONA}\n\nNo KB articles found. Answer from Ginesys ERP expertise. Be complete and confident.\n\nQuestion: "${q}"\n\nFormat: ## heading, numbered steps, **bold** UI elements`;
+    const langSuffix = langInstruction ? `\n\n${langInstruction}` : '';
+  return `${AI_PERSONA}\n\nNo KB articles found. Answer from Ginesys ERP expertise. Be complete and confident.\n\nQuestion: "${q}"\n\nFormat: ## heading, numbered steps, **bold** UI elements${langSuffix}`;
   }
   const kb = results.map((r,i)=>{
     const crumb=[...(r.ancestors||[]),r.title].join(' › ');
@@ -249,8 +230,8 @@ function buildKBPrompt(results, q, ytResults=[], langInstruction='') {
   }).join('\n\n');
   const yt = (ytResults&&ytResults.length)
     ? '\n\nYOUTUBE:\n'+ytResults.map((v,i)=>`${i+1}. "${v.title}" — ${v.url}`).join('\n') : '';
-  const langPrefix = langInstruction ? `***${langInstruction}***\n\nYOU MUST FOLLOW THE ABOVE LANGUAGE INSTRUCTION FOR YOUR ENTIRE RESPONSE.\n\n` : '';
-  return `${langPrefix}${AI_PERSONA}\n\nKB ARTICLES (${results.length}):\n${'─'.repeat(40)}\n${kb}\n${'─'.repeat(40)}${yt}\n\nQUESTION: "${q}"\n\nINSTRUCTIONS:\n- Detect intent first\n- Use ONLY relevant content (ignore unrelated modules)\n- Combine articles for complete answer\n- Never say "not found"\n- ## sections, numbered steps, **bold** UI labels\n- End with: ## Sources (links)\n${langInstruction ? '- '+langInstruction : ''}`;
+  const langSuffix2 = langInstruction ? `\n\n${langInstruction}` : '';
+  return `${AI_PERSONA}\n\nKB ARTICLES (${results.length}):\n${'─'.repeat(40)}\n${kb}\n${'─'.repeat(40)}${yt}\n\nQUESTION: "${q}"\n\nINSTRUCTIONS:\n- Detect intent first\n- Use ONLY relevant content (ignore unrelated modules)\n- Combine articles for complete answer\n- Never say "not found"\n- ## sections, numbered steps, **bold** UI labels\n- End with: ## Sources (links)${langSuffix2}`;
 }
 
 function buildRelatedPrompt(q, answer) {
@@ -468,16 +449,12 @@ const server = http.createServer(async (req,res)=>{
     // SSE headers — flush immediately
     res.writeHead(200,{
       'Content-Type':'text/event-stream',
-      'Cache-Control':'no-cache, no-transform',
+      'Cache-Control':'no-cache',
       'Connection':'keep-alive',
       'Access-Control-Allow-Origin':'*',
       'X-Accel-Buffering':'no',
-      'X-Content-Type-Options':'nosniff',
-      'Transfer-Encoding':'identity',
     });
-    if(req.socket) { req.socket.setNoDelay(true); req.socket.setTimeout(0); }
-    // Force flush on Render's proxy
-    res.flushHeaders();
+    if(req.socket) req.socket.setNoDelay(true);
 
     const send=(event,data)=>{
       try{ res.write('event: '+event+'\ndata: '+JSON.stringify(data)+'\n\n'); }catch{}
@@ -489,7 +466,7 @@ const server = http.createServer(async (req,res)=>{
     // Casual chat
     if(isCasualChat(q)){
       try{
-        const answer=await callClaude(buildCasualPrompt(langInstruction),[...histMsgs,{role:'user',content:langInstruction ? q+'\n\n'+langInstruction : q}],400);
+        const answer=await callClaude(buildCasualPrompt(langInstruction),[...histMsgs,{role:'user',content:q}],400);
         send('answer',{text:answer,casual:true,sources:[],images:[],videos:[],related:[]});
       }catch(e){ send('error',{message:e.message}); }
       return res.end();
@@ -547,22 +524,13 @@ const server = http.createServer(async (req,res)=>{
     // Send metadata first so UI shows sources/images while text streams
     send('meta',{fromKB,sources,images,videos,fromCache:false});
 
-    console.log('  [STREAM] Starting Claude stream for:', q.slice(0,50));
-
-    // Heartbeat every 5s to prevent Render proxy timeout
-    const heartbeat = setInterval(()=>{
-      if(!res.writableEnded) res.write(': heartbeat\n\n');
-    }, 5000);
-
     let fullText='', streamDone=false;
     streamClaude(
       system,
-      [...histMsgs,{role:'user',content:langInstruction ? q+'\n\n'+langInstruction : q}],
+      [...histMsgs,{role:'user',content:q}],
       (chunk)=>{ fullText+=chunk; send('chunk',{text:chunk}); },
       async()=>{
         if(streamDone)return; streamDone=true;
-        clearInterval(heartbeat);
-        console.log('  [STREAM] Done, text length:', fullText.length);
         send('done',{related:[]});
         res.end();
         // Cache + related questions in background
@@ -578,7 +546,7 @@ const server = http.createServer(async (req,res)=>{
             try{saveCache();}catch{}
           }).catch(()=>{});
       },
-      (err)=>{ clearInterval(heartbeat); console.log('  [STREAM] Error:',err.message); send('error',{message:err.message}); res.end(); }
+      (err)=>{ send('error',{message:err.message}); res.end(); }
     );
     return;
   }
@@ -596,7 +564,7 @@ const server = http.createServer(async (req,res)=>{
 
       // Casual chat — fast Haiku response
       if(isCasualChat(q)){
-        const answer = await callClaude(buildCasualPrompt(langInstruction),[...histMsgs,{role:'user',content:langInstruction ? q+'\n\n'+langInstruction : q}],400);
+        const answer = await callClaude(buildCasualPrompt(langInstruction),[...histMsgs,{role:'user',content:q}],400);
         return jsonRes(res,200,{answer,fromKB:false,casual:true,sources:[],images:[],videos:[],related:[]});
       }
 
@@ -624,7 +592,7 @@ const server = http.createServer(async (req,res)=>{
       const system  = buildKBPrompt(results, q, ytResults, langInstruction);
 
       // Get answer from Claude
-      const answer = await callClaude(system,[...histMsgs,{role:'user',content:langInstruction ? q+'\n\n'+langInstruction : q}],4096);
+      const answer = await callClaude(system,[...histMsgs,{role:'user',content:q}],4096);
 
       // Return answer IMMEDIATELY — don't wait for related questions
       cache.set(cacheKey,{answer,fromKB,sources,images,videos,related:[],ts:Date.now()});
@@ -699,7 +667,7 @@ server.on('error', err => {
 server.listen(currentPort,()=>{
   const s=search.getStats(), yt=search.yt?search.yt.getStats():{loaded:false,totalVideos:0};
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log('║  Ginesys AI Assistant  v10.0                     ║');
+  console.log('║  Ginesys AI Assistant  v6.0                      ║');
   console.log('╠══════════════════════════════════════════════════╣');
   console.log(`║  http://localhost:${currentPort}                            ║`);
   console.log(`║  Admin: http://localhost:${currentPort}/admin               ║`);
