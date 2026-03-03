@@ -27,7 +27,7 @@ const {
   ATLASSIAN_EMAIL,
   ATLASSIAN_API_TOKEN,
   CONFLUENCE_BASE_URL = 'https://ginesysone.atlassian.net',
-  MAX_CHARS = 8000,
+  MAX_CHARS = 12000,
 } = process.env;
 
 // Sanitize API key — strip quotes/spaces/newlines that cause header errors
@@ -170,9 +170,9 @@ async function callClaude(system,messages,maxTokens=512) {
 }
 
 // ── Claude — streaming (main answers) ────────────────────────────────────────
-function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=2048) {
+function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
   if (!ANTHROPIC_API_KEY) return onError(new Error('ANTHROPIC_API_KEY not configured'));
-  const body=JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:maxTokens,stream:true,system,messages});
+  const body=JSON.stringify({model:'claude-opus-4-6',max_tokens:maxTokens,stream:true,system,messages});
   const req=https.request({
     hostname:'api.anthropic.com',path:'/v1/messages',method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Length':Buffer.byteLength(body)},
@@ -206,7 +206,7 @@ function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=2048) {
     res.on('end',()=>{if(!done)onDone();});
     res.on('error',onError);
   });
-  req.setTimeout(55000, () => {
+  req.setTimeout(25000, () => {
     console.error('❌ Claude request timeout after 25s');
     req.destroy();
     onError(new Error('Claude API timeout'));
@@ -563,20 +563,21 @@ const server = http.createServer(async (req,res)=>{
         if(streamDone)return; streamDone=true;
         clearInterval(heartbeat);
         console.log('  [STREAM] Done, text length:', fullText.length);
-        send('done',{related:[]});
+        // Get related questions (5s timeout) before sending done
+        let related = [];
+        try {
+          const relRaw = await Promise.race([
+            callClaude('Return ONLY a JSON array of 3 short follow-up questions. No other text.',
+              [{role:'user',content:'User asked: "'+q+'". Return JSON array of 3 short follow-up questions about Ginesys ERP.'}], 150),
+            new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000))
+          ]);
+          const parsed = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
+          if(Array.isArray(parsed)) related = parsed.map(r=>typeof r==='string'?r:r.question||String(r)).filter(Boolean).slice(0,3);
+        } catch(e){ console.log('  [RELATED] skipped:', e.message); }
+        send('done',{related});
         res.end();
-        // Cache + related questions in background
-        cache.set(cacheKey,{answer:fullText,fromKB,sources,images,videos,related:[],ts:Date.now()});
-        callClaude('You are a helpful Ginesys ERP assistant.',[{role:'user',content:buildRelatedPrompt(q,fullText)}],200)
-          .then(raw=>{
-            try{
-              const rel=JSON.parse(raw.replace(/```json|```/g,'').trim());
-              if(Array.isArray(rel)){
-                const c=cache.get(cacheKey); if(c) c.related=rel;
-              }
-            }catch{}
-            try{saveCache();}catch{}
-          }).catch(()=>{});
+        cache.set(cacheKey,{answer:fullText,fromKB,sources,images,videos,related,ts:Date.now()});
+        try{saveCache();}catch{}
       },
       (err)=>{ clearInterval(heartbeat); console.log('  [STREAM] Error:',err.message); send('error',{message:err.message}); res.end(); }
     );
