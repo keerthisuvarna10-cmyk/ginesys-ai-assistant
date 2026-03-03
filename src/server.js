@@ -27,7 +27,7 @@ const {
   ATLASSIAN_EMAIL,
   ATLASSIAN_API_TOKEN,
   CONFLUENCE_BASE_URL = 'https://ginesysone.atlassian.net',
-  MAX_CHARS = 12000,
+  MAX_CHARS = 8000,
 } = process.env;
 
 // Sanitize API key — strip quotes/spaces/newlines that cause header errors
@@ -170,9 +170,9 @@ async function callClaude(system,messages,maxTokens=512) {
 }
 
 // ── Claude — streaming (main answers) ────────────────────────────────────────
-function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
+function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=2048) {
   if (!ANTHROPIC_API_KEY) return onError(new Error('ANTHROPIC_API_KEY not configured'));
-  const body=JSON.stringify({model:'claude-opus-4-6',max_tokens:maxTokens,stream:true,system,messages});
+  const body=JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:maxTokens,stream:true,system,messages});
   const req=https.request({
     hostname:'api.anthropic.com',path:'/v1/messages',method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Length':Buffer.byteLength(body)},
@@ -206,7 +206,7 @@ function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
     res.on('end',()=>{if(!done)onDone();});
     res.on('error',onError);
   });
-  req.setTimeout(25000, () => {
+  req.setTimeout(55000, () => {
     console.error('❌ Claude request timeout after 25s');
     req.destroy();
     onError(new Error('Claude API timeout'));
@@ -474,14 +474,13 @@ const server = http.createServer(async (req,res)=>{
       'X-Accel-Buffering':'no',
       'X-Content-Type-Options':'nosniff',
       'Transfer-Encoding':'identity',
-      'X-Railway-Disable-Buffering':'1',
     });
     if(req.socket) { req.socket.setNoDelay(true); req.socket.setTimeout(0); }
     // Force flush on Render's proxy
     res.flushHeaders();
 
     const send=(event,data)=>{
-      try{ res.write('event: '+event+'\ndata: '+JSON.stringify(data)+'\n\n'); if(res.flush) res.flush(); }catch{}
+      try{ res.write('event: '+event+'\ndata: '+JSON.stringify(data)+'\n\n'); }catch{}
     };
 
     const histMsgs=(history||[]).slice(-10).map(m=>({role:m.role,content:m.content}));
@@ -552,8 +551,8 @@ const server = http.createServer(async (req,res)=>{
 
     // Heartbeat every 5s to prevent Render proxy timeout
     const heartbeat = setInterval(()=>{
-      if(!res.writableEnded) { res.write(': heartbeat\n\n'); if(res.flush) res.flush(); }
-    }, 3000);
+      if(!res.writableEnded) res.write(': heartbeat\n\n');
+    }, 5000);
 
     let fullText='', streamDone=false;
     streamClaude(
