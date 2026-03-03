@@ -563,21 +563,20 @@ const server = http.createServer(async (req,res)=>{
         if(streamDone)return; streamDone=true;
         clearInterval(heartbeat);
         console.log('  [STREAM] Done, text length:', fullText.length);
-        // Get related questions (5s timeout) before sending done
-        let related = [];
-        try {
-          const relRaw = await Promise.race([
-            callClaude('Return ONLY a JSON array of 3 short follow-up questions. No other text.',
-              [{role:'user',content:'User asked: "'+q+'". Return JSON array of 3 short follow-up questions about Ginesys ERP.'}], 150),
-            new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000))
-          ]);
-          const parsed = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
-          if(Array.isArray(parsed)) related = parsed.map(r=>typeof r==='string'?r:r.question||String(r)).filter(Boolean).slice(0,3);
-        } catch(e){ console.log('  [RELATED] skipped:', e.message); }
-        send('done',{related});
+        send('done',{related:[]});
         res.end();
-        cache.set(cacheKey,{answer:fullText,fromKB,sources,images,videos,related,ts:Date.now()});
-        try{saveCache();}catch{}
+        // Cache + related questions in background
+        cache.set(cacheKey,{answer:fullText,fromKB,sources,images,videos,related:[],ts:Date.now()});
+        callClaude('You are a helpful Ginesys ERP assistant.',[{role:'user',content:buildRelatedPrompt(q,fullText)}],200)
+          .then(raw=>{
+            try{
+              const rel=JSON.parse(raw.replace(/```json|```/g,'').trim());
+              if(Array.isArray(rel)){
+                const c=cache.get(cacheKey); if(c) c.related=rel;
+              }
+            }catch{}
+            try{saveCache();}catch{}
+          }).catch(()=>{});
       },
       (err)=>{ clearInterval(heartbeat); console.log('  [STREAM] Error:',err.message); send('error',{message:err.message}); res.end(); }
     );
@@ -627,27 +626,24 @@ const server = http.createServer(async (req,res)=>{
       // Get answer from Claude
       const answer = await callClaude(system,[...histMsgs,{role:'user',content:q}],4096);
 
-      // Return answer IMMEDIATELY — don't wait for related questions
-      cache.set(cacheKey,{answer,fromKB,sources,images,videos,related:[],ts:Date.now()});
-      jsonRes(res,200,{answer,fromKB,sources,images,videos,related:[],fromCache:false});
+      // Get related questions with 5s timeout
+      let related = [];
+      try {
+        const relRaw = await Promise.race([
+          callClaude(
+            'Return ONLY a JSON array of 3 short follow-up questions. No explanation, no markdown, just the array.',
+            [{role:'user',content:'Question was: "'+q+'". Suggest 3 short follow-up questions a Ginesys ERP user might ask next. Return ONLY a JSON array of strings.'}],
+            150
+          ),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000))
+        ]);
+        const parsed = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
+        if(Array.isArray(parsed)) related = parsed.map(r=>typeof r==='string'?r:r.question||String(r)).filter(Boolean).slice(0,3);
+      } catch(e){ console.log('  [RELATED] skipped:', e.message); }
 
-      // Generate related questions in background AFTER response is sent
-      callClaude(
-        'You are a helpful Ginesys ERP assistant.',
-        [{role:'user',content:buildRelatedPrompt(q,answer)}], 200
-      ).then(relRaw => {
-        try {
-          const related = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
-          if(Array.isArray(related) && related.length > 0) {
-            // Update cache with related questions for next time
-            const cached = cache.get(cacheKey);
-            if(cached) { cached.related = related; }
-          }
-        } catch{}
-        setImmediate(()=>{ try{saveCache();}catch{} });
-      }).catch(()=>{});
-
-      return;
+      cache.set(cacheKey,{answer,fromKB,sources,images,videos,related,ts:Date.now()});
+      setImmediate(()=>{ try{saveCache();}catch{} });
+      return jsonRes(res,200,{answer,fromKB,sources,images,videos,related,fromCache:false});
     }catch(e){
       console.error('Ask error:', e.message);
       return jsonRes(res,500,{error:e.message});
