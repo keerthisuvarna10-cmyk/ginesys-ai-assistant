@@ -534,7 +534,7 @@ const server = http.createServer(async (req,res)=>{
     // KB search — fetch more YT results for video requests
     const [results,ytResults]=await Promise.all([
       Promise.resolve(search.search(searchQuery, 6)),
-      Promise.resolve(search.yt?search.yt.search(searchQuery, isVideoRequest?8:3, isVideoRequest):[]),
+      Promise.resolve(search.yt ? search.yt.search(searchQuery, isVideoRequest?8:4) : []),
     ]);
     const fromKB=results.length>0;
     const images=fromKB?filterRelevantImages(results,searchQuery,3):[];
@@ -563,20 +563,21 @@ const server = http.createServer(async (req,res)=>{
         if(streamDone)return; streamDone=true;
         clearInterval(heartbeat);
         console.log('  [STREAM] Done, text length:', fullText.length);
-        send('done',{related:[]});
+        // Get related questions before sending done (3s timeout)
+        let related = [];
+        try {
+          const relRaw = await Promise.race([
+            callClaude('Return ONLY a JSON array of 3 short follow-up questions, no other text.',
+              [{role:'user',content:'Question was: "'+q+'"\nAnswer started: "'+fullText.slice(0,200)+'"\nReturn JSON array of 3 follow-up questions.'}], 120),
+            new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))
+          ]);
+          const parsed = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
+          if (Array.isArray(parsed)) related = parsed.slice(0,3);
+        } catch(e) { console.log('  [RELATED] skipped:', e.message); }
+        send('done',{related});
         res.end();
-        // Cache + related questions in background
-        cache.set(cacheKey,{answer:fullText,fromKB,sources,images,videos,related:[],ts:Date.now()});
-        callClaude('You are a helpful Ginesys ERP assistant.',[{role:'user',content:buildRelatedPrompt(q,fullText)}],200)
-          .then(raw=>{
-            try{
-              const rel=JSON.parse(raw.replace(/```json|```/g,'').trim());
-              if(Array.isArray(rel)){
-                const c=cache.get(cacheKey); if(c) c.related=rel;
-              }
-            }catch{}
-            try{saveCache();}catch{}
-          }).catch(()=>{});
+        cache.set(cacheKey,{answer:fullText,fromKB,sources,images,videos,related,ts:Date.now()});
+        try{saveCache();}catch{}
       },
       (err)=>{ clearInterval(heartbeat); console.log('  [STREAM] Error:',err.message); send('error',{message:err.message}); res.end(); }
     );
@@ -623,33 +624,30 @@ const server = http.createServer(async (req,res)=>{
       const sources = results.map(r=>({title:r.title,url:r.url,score:r.score,space:r.spaceKey}));
       const system  = buildKBPrompt(results, q, ytResults, langInstruction);
 
-      // Get answer from Claude with timeout protection
-      let answer;
-      try {
-        answer = await Promise.race([
-          callClaude(system,[...histMsgs,{role:'user',content:q}],4096),
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('Claude timeout after 55s')),55000))
-        ]);
-      } catch(e) {
-        console.error('Claude answer error:', e.message);
-        return jsonRes(res,500,{error:'AI response failed. Please try again.'});
-      }
+      // Get answer from Claude
+      const answer = await callClaude(system,[...histMsgs,{role:'user',content:q}],4096);
 
-      // Get related questions (8s timeout — best effort)
-      let related = [];
-      try {
-        const relRaw = await Promise.race([
-          callClaude('You are a Ginesys ERP assistant. Return ONLY a JSON array of 3 short follow-up questions.',
-            [{role:'user',content:`Question: "${q}"\nAnswer summary: "${answer.slice(0,200)}"\nReturn JSON array of 3 follow-up questions.`}], 150),
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
-        ]);
-        const parsed = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
-        if(Array.isArray(parsed)) related = parsed.slice(0,3);
-      } catch(e){ console.log('Related questions skipped:', e.message); }
+      // Return answer IMMEDIATELY — don't wait for related questions
+      cache.set(cacheKey,{answer,fromKB,sources,images,videos,related:[],ts:Date.now()});
+      jsonRes(res,200,{answer,fromKB,sources,images,videos,related:[],fromCache:false});
 
-      cache.set(cacheKey,{answer,fromKB,sources,images,videos,related,ts:Date.now()});
-      setImmediate(()=>{ try{saveCache();}catch{} });
-      return jsonRes(res,200,{answer,fromKB,sources,images,videos,related,fromCache:false});
+      // Generate related questions in background AFTER response is sent
+      callClaude(
+        'You are a helpful Ginesys ERP assistant.',
+        [{role:'user',content:buildRelatedPrompt(q,answer)}], 200
+      ).then(relRaw => {
+        try {
+          const related = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
+          if(Array.isArray(related) && related.length > 0) {
+            // Update cache with related questions for next time
+            const cached = cache.get(cacheKey);
+            if(cached) { cached.related = related; }
+          }
+        } catch{}
+        setImmediate(()=>{ try{saveCache();}catch{} });
+      }).catch(()=>{});
+
+      return;
     }catch(e){
       console.error('Ask error:', e.message);
       return jsonRes(res,500,{error:e.message});

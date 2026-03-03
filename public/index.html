@@ -60,7 +60,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 /* CHAT */
 .chat{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
-#messages{flex:1;overflow-y:auto;padding:28px 32px;display:flex;flex-direction:column;gap:24px;min-height:0}
+#messages{flex:1;overflow-y:auto;padding:28px 32px;display:flex;flex-direction:column;gap:24px;min-height:0;scroll-behavior:smooth;overscroll-behavior:contain}
 
 /* WELCOME */
 .welcome{max-width:520px;margin:4px auto;text-align:center;animation:fadeUp .5s ease}
@@ -73,7 +73,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .welcome-hint{font-size:13px;color:var(--text3);margin-top:16px;font-style:italic}
 
 /* MESSAGES */
-.msg-row{display:flex;gap:11px;animation:fadeUp .3s ease}.msg-row.bot>.stream-wrap,.msg-row.bot>.acard{flex:1;min-width:0;max-width:calc(100% - 46px)}
+.msg-row{display:flex;gap:11px;animation:fadeUp .3s ease}.msg-row.bot>.stream-wrap,.msg-row.bot>.acard{flex:1;min-width:0;max-width:calc(100% - 52px)}.stream-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:0}
 .msg-row.user{flex-direction:row-reverse}
 .avatar{width:34px;height:34px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .avatar.bot{background:var(--dark);border:2px solid rgba(106,191,75,.5);padding:4px}
@@ -646,7 +646,9 @@ async function sendMsg() {
               <div class="ss-cap">${esc(cap)}</div></div>`;
           }).join('')
         }</div>`;
-        streamRow.querySelector('.stream-wrap').insertBefore(ssDiv, streamRow.querySelector('.stream-card'));
+        const sc = streamRow.querySelector('.stream-card');
+        if (sc && sc.nextSibling) streamRow.querySelector('.stream-wrap').insertBefore(ssDiv, sc.nextSibling);
+        else streamRow.querySelector('.stream-wrap').appendChild(ssDiv);
       }
     }
     // Videos
@@ -681,14 +683,15 @@ async function sendMsg() {
 
   function flushWords() {
     if (!wordBuffer.length) { renderTimer=null; return; }
-    const batch = wordBuffer.splice(0, 2).join('');
+    const batch = wordBuffer.splice(0, 3).join('');
     fullText += batch;
     if (contentEl) {
       contentEl.innerHTML = md(fullText);
-      // Only auto-scroll if user hasn't manually scrolled up
-      if (!userScrolledUp) msgsEl.scrollTop = msgsEl.scrollHeight;
+      // Auto-scroll only if user is near the bottom
+      const distFromBottom = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight;
+      if (distFromBottom < 120) msgsEl.scrollTop = msgsEl.scrollHeight;
     }
-    renderTimer = setTimeout(flushWords, 30);
+    renderTimer = setTimeout(flushWords, 15);
   }
 
   function handleChunk(text) {
@@ -752,94 +755,39 @@ async function sendMsg() {
   }
 
   try {
-    const resp = await fetch(window.location.origin + '/api/ask', {
+    const resp = await fetch(window.location.origin + '/api/ask-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question:text, history:chatHistory.slice(-8), lang:getLangInstruction() }),
     });
     if (!resp.ok) throw new Error('Server error: ' + resp.status);
-    const data = await resp.json();
-    rmTyping();
-
-    const ans     = data.answer || '';
-    const fromKB  = !!data.fromKB;
-    const sources = data.sources || [];
-    const images  = data.images  || [];
-    const videos  = data.videos  || [];
-    const related = data.related || [];
-    chatHistory.push({ role:'assistant', content: ans });
-
-    // Build response card
-    const row = document.createElement('div');
-    row.className = 'msg-row';
-
-    if (data.casual) {
-      row.innerHTML = `<div class="avatar bot">${BOT_SVG}</div><div><div class="typing-card" style="padding:14px 18px;font-size:14px;line-height:1.8;color:var(--text);min-width:200px"></div></div>`;
-      msgsEl.appendChild(row);
-      await typeWriter(row.querySelector('.typing-card'), ans, true);
-    } else {
-      const mainBadge = sources.length
-        ? `<span class="badge green">✓ Ginesys One Wiki</span>`
-        : `<span class="badge green" style="background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe">✦ Ginesys AI</span>`;
-      const srcBadges = sources.map((s,i) => `<a class="badge blue" href="${s.url}" target="_blank">📄 ${esc(s.title||'Article '+(i+1))}</a>`).join('');
-
-      let ssHtml = '';
-      if (fromKB && images.length) {
-        const cards = images.map(img => {
-          const cap = (img.caption||'').replace(/^image\d[\d\s._-]*/i,'').replace(/\.(png|jpg|jpeg|gif|webp)$/i,'').replace(/[-_]+/g,' ').trim() || img.pageTitle || 'Screenshot';
-          return `<div class="ss-card" onclick="openLB('${img.proxyUrl}','${esc(cap)}')"><img class="ss-img" src="${img.proxyUrl}" loading="lazy" onerror="this.closest('.ss-card').style.display='none'"/><div class="ss-cap">${esc(cap)}</div></div>`;
-        }).join('');
-        ssHtml = `<div class="screenshots"><div class="ss-title">📸 Screenshots from KB</div><div class="ss-grid">${cards}</div></div>`;
+    if (!resp.body) throw new Error('No stream body');
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const parts = buf.split('\n\n'); buf = parts.pop();
+      for (const part of parts) {
+        let evType = 'message', dataStr = '';
+        for (const line of part.split('\n')) {
+          if (line.startsWith('event: ')) evType = line.slice(7).trim();
+          else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
+        }
+        if (!dataStr) continue;
+        try {
+          const d = JSON.parse(dataStr);
+          if      (evType === 'meta')   handleMeta(d);
+          else if (evType === 'chunk')  handleChunk(d.text || '');
+          else if (evType === 'done')   handleDone(d);
+          else if (evType === 'answer') handleAnswer(d);
+          else if (evType === 'error')  handleError(d.message || 'Unknown error');
+        } catch(e) {}
       }
-
-      let vidHtml = '';
-      if (fromKB && videos.length) {
-        const vcards = videos.map(vid => {
-          const cap = (vid.caption||'Video').replace(/[-_]+/g,' ').trim() || 'Video';
-          if (vid.type==='youtube' && vid.videoId) {
-            return `<div class="vid-card"><div class="vid-thumb" style="cursor:pointer" onclick="this.innerHTML='<iframe width=100% height=140 src=https://www.youtube.com/embed/${vid.videoId}?autoplay=1 frameborder=0 allowfullscreen></iframe>'"><img class="vid-thumb-img" src="https://img.youtube.com/vi/${vid.videoId}/hqdefault.jpg" onerror="this.style.display='none'"/><div class="vid-play">▶</div></div><div class="vid-info"><div class="vid-type">YouTube</div>${esc(cap)}</div></div>`;
-          }
-          return `<div class="vid-card"><div class="vid-thumb" style="cursor:pointer" onclick="this.outerHTML='<video controls autoplay style=width:100%;border-radius:10px><source src=${vid.proxyUrl||vid.url} type=video/mp4></video>'"><div style="text-align:center;padding:20px;color:#888">🎬<br><small>${esc(cap)}</small></div></div><div class="vid-info"><div class="vid-type">VIDEO</div>${esc(cap)}</div></div>`;
-        }).join('');
-        vidHtml = `<div class="videos"><div class="vid-title">🎬 Videos</div><div class="vid-grid">${vcards}</div></div>`;
-      }
-
-      const srcFooter = sources.length
-        ? `<div class="src-footer"><span class="src-label">📖 Source:</span><div class="src-links">${sources.map(s=>`<a class="src-link" href="${s.url}" target="_blank">↗ ${esc(s.title)}</a>`).join('')}</div></div>` : '';
-
-      row.innerHTML = `
-        <div class="avatar bot">${BOT_SVG}</div>
-        <div class="acard">
-          <div class="acard-head ${fromKB?'from-kb':'not-kb'}">${mainBadge}${srcBadges}</div>
-          <div class="abody"></div>
-          ${ssHtml}${vidHtml}${srcFooter}
-        </div>`;
-      msgsEl.appendChild(row);
-      row.scrollIntoView({behavior:'smooth',block:'start'});
-      await typeWriter(row.querySelector('.abody'), ans, false);
     }
-
-    // Feedback buttons
-    const fbDiv = document.createElement('div');
-    fbDiv.className = 'feedback-row';
-    const safeQ = text.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    fbDiv.innerHTML = `<span class="fb-label">Was this helpful?</span>
-      <button class="fb-btn" onclick="sendFeedback(this,'up','${safeQ}')">👍</button>
-      <button class="fb-btn" onclick="sendFeedback(this,'down','${safeQ}')">👎</button>`;
-    row.appendChild(fbDiv);
-
-    // Related questions
-    if (related.length > 0) {
-      const relDiv = document.createElement('div');
-      relDiv.className = 'related-qs';
-      relDiv.innerHTML = '<div class="related-label">💬 You might also ask:</div>' +
-        related.map(rq => `<button class="related-btn" onclick="askRelated(this)">${esc(rq)}</button>`).join('');
-      row.appendChild(relDiv);
-    }
-
-    msgsEl.scrollTop = msgsEl.scrollHeight;
-    isLoading = false; sendBtn.disabled = false; qEl.focus();
-
+    if (!isDone) handleDone({ related: [] });
   } catch(err) {
     handleError(err.message);
     chatHistory.pop();
@@ -851,18 +799,6 @@ function closeLB(){document.getElementById('lightbox').classList.remove('open');
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLB();});
 
   // ── Related question click ──────────────────────────────────────────────────
-  async function typeWriter(el, text, plain) {
-    const words = text.split(' ');
-    let out = '';
-    for (let i = 0; i < words.length; i++) {
-      out += (i > 0 ? ' ' : '') + words[i];
-      el.innerHTML = plain ? out : md(out);
-      msgsEl.scrollTop = msgsEl.scrollHeight;
-      await new Promise(r => setTimeout(r, 18));
-    }
-    el.innerHTML = plain ? out : md(out);
-  }
-
   function askRelated(btn) {
     const q = btn.textContent.trim();
     qEl.value = q;
