@@ -623,30 +623,33 @@ const server = http.createServer(async (req,res)=>{
       const sources = results.map(r=>({title:r.title,url:r.url,score:r.score,space:r.spaceKey}));
       const system  = buildKBPrompt(results, q, ytResults, langInstruction);
 
-      // Get answer from Claude
-      const answer = await callClaude(system,[...histMsgs,{role:'user',content:q}],4096);
+      // Get answer from Claude (with timeout protection)
+      let answer;
+      try {
+        answer = await Promise.race([
+          callClaude(system,[...histMsgs,{role:'user',content:q}],4096),
+          new Promise((_,rej) => setTimeout(()=>rej(new Error('Claude timeout')), 55000))
+        ]);
+      } catch(e) {
+        console.error('Claude error:', e.message);
+        return jsonRes(res,500,{error:'AI response failed: '+e.message});
+      }
 
-      // Return answer IMMEDIATELY — don't wait for related questions
-      cache.set(cacheKey,{answer,fromKB,sources,images,videos,related:[],ts:Date.now()});
-      jsonRes(res,200,{answer,fromKB,sources,images,videos,related:[],fromCache:false});
+      // Get related questions (with short timeout — best effort)
+      let related = [];
+      try {
+        const relRaw = await Promise.race([
+          callClaude('You are a helpful Ginesys ERP assistant.',[{role:'user',content:buildRelatedPrompt(q,answer)}], 200),
+          new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 8000))
+        ]);
+        const parsed = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
+        if(Array.isArray(parsed)) related = parsed.slice(0,4);
+      } catch{}
 
-      // Generate related questions in background AFTER response is sent
-      callClaude(
-        'You are a helpful Ginesys ERP assistant.',
-        [{role:'user',content:buildRelatedPrompt(q,answer)}], 200
-      ).then(relRaw => {
-        try {
-          const related = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
-          if(Array.isArray(related) && related.length > 0) {
-            // Update cache with related questions for next time
-            const cached = cache.get(cacheKey);
-            if(cached) { cached.related = related; }
-          }
-        } catch{}
-        setImmediate(()=>{ try{saveCache();}catch{} });
-      }).catch(()=>{});
-
-      return;
+      // Cache and respond with everything including related
+      cache.set(cacheKey,{answer,fromKB,sources,images,videos,related,ts:Date.now()});
+      setImmediate(()=>{ try{saveCache();}catch{} });
+      return jsonRes(res,200,{answer,fromKB,sources,images,videos,related,fromCache:false});
     }catch(e){
       console.error('Ask error:', e.message);
       return jsonRes(res,500,{error:e.message});
