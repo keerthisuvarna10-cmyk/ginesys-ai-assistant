@@ -646,7 +646,7 @@ async function sendMsg() {
               <div class="ss-cap">${esc(cap)}</div></div>`;
           }).join('')
         }</div>`;
-        streamRow.querySelector('.stream-wrap').appendChild(ssDiv);
+        streamRow.querySelector('.stream-wrap').insertBefore(ssDiv, streamRow.querySelector('.stream-card'));
       }
     }
     // Videos
@@ -752,44 +752,50 @@ async function sendMsg() {
   }
 
   try {
-    const resp = await fetch(window.location.origin + '/api/ask-stream', {
+    const resp = await fetch(window.location.origin + '/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question:text, history:chatHistory.slice(-8), lang:getLangInstruction() }),
     });
     if (!resp.ok) throw new Error('Server error: ' + resp.status);
-    if (!resp.body) throw new Error('No stream');
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const parts = buf.split('\n\n'); buf = parts.pop();
-      for (const part of parts) {
-        let evType = 'message', dataStr = '';
-        for (const line of part.split('\n')) {
-          if (line.startsWith('event: ')) evType = line.slice(7).trim();
-          else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
+    const data = await resp.json();
+    rmTyping();
+
+    // Show meta (badges, sources)
+    handleMeta({
+      fromKB: data.fromKB,
+      sources: data.sources||[],
+      images: data.images||[],
+      videos: data.videos||[],
+      fromCache: data.fromCache||false
+    });
+
+    // Word-by-word simulation
+    ensureBubble();
+    const words = (data.answer||'').split(' ');
+    let i = 0;
+    function nextWord() {
+      if (i >= words.length) {
+        // Done — flush remaining and finish
+        if (wordBuffer.length) {
+          fullText += wordBuffer.join('');
+          wordBuffer = [];
+          if (contentEl) contentEl.innerHTML = md(fullText);
         }
-        if (!dataStr) continue;
-        try {
-          const d = JSON.parse(dataStr);
-          if      (evType === 'meta')   handleMeta(d);
-          else if (evType === 'chunk')  handleChunk(d.text || '');
-          else if (evType === 'done')   handleDone(d);
-          else if (evType === 'answer') handleAnswer(d);
-          else if (evType === 'error')  handleError(d.message || 'Unknown error');
-        } catch(e) {}
+        chatHistory.push({ role:'assistant', content: data.answer||'' });
+        handleDone({ related: data.related||[] });
+        return;
       }
+      handleChunk(words[i] + (i < words.length-1 ? ' ' : ''));
+      i++;
+      setTimeout(nextWord, 18);
     }
-    if (!isDone) handleDone({ related: [] });
+    nextWord();
+
   } catch(err) {
     handleError(err.message);
     chatHistory.pop();
   }
-}
 
 function openLB(src,cap){document.getElementById('lb-img').src=src;document.getElementById('lb-cap').textContent=cap;document.getElementById('lightbox').classList.add('open');}
 function closeLB(){document.getElementById('lightbox').classList.remove('open');}
