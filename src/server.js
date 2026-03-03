@@ -12,8 +12,7 @@ process.on('uncaughtException', err => {
   console.error(err.stack);
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('\n❌ UNHANDLED REJECTION (server keeps running):', reason?.message || reason);
-  // Do NOT exit — keep server alive on Render
+  console.error('\n❌ UNHANDLED REJECTION:', reason?.message || reason);
 });
 const https = require('https');
 const fs    = require('fs');
@@ -23,15 +22,12 @@ const search = require('./search');
 
 const {
   PORT = 3000,
-  ANTHROPIC_API_KEY: _RAW_KEY,
+  ANTHROPIC_API_KEY,
   ATLASSIAN_EMAIL,
   ATLASSIAN_API_TOKEN,
   CONFLUENCE_BASE_URL = 'https://ginesysone.atlassian.net',
-  MAX_CHARS = 12000,
+  MAX_CHARS = 38000,
 } = process.env;
-
-// Sanitize API key — strip quotes/spaces/newlines that cause header errors
-const ANTHROPIC_API_KEY = _RAW_KEY ? _RAW_KEY.trim().replace(/^["']+|["']+$/g,'').replace(/[\r\n\t]/g,'') : undefined;
 
 const PUBLIC_DIR  = path.join(__dirname,'..','public');
 const DATA_DIR    = path.join(__dirname,'..','data');
@@ -172,22 +168,12 @@ async function callClaude(system,messages,maxTokens=512) {
 // ── Claude — streaming (main answers) ────────────────────────────────────────
 function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
   if (!ANTHROPIC_API_KEY) return onError(new Error('ANTHROPIC_API_KEY not configured'));
-  const body=JSON.stringify({model:'claude-opus-4-6',max_tokens:maxTokens,stream:true,system,messages});
+  const body=JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTokens,stream:true,system,messages});
   const req=https.request({
     hostname:'api.anthropic.com',path:'/v1/messages',method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Length':Buffer.byteLength(body)},
   },res=>{
     let buf='',done=false;
-    // Log non-200 responses for debugging
-    if(res.statusCode!==200){
-      let errBody='';
-      res.on('data',c=>errBody+=c.toString());
-      res.on('end',()=>{
-        console.error('❌ Claude API error status:',res.statusCode, errBody.slice(0,200));
-        onError(new Error('Claude API error: '+res.statusCode+' '+errBody.slice(0,100)));
-      });
-      return;
-    }
     res.on('data',chunk=>{
       buf+=chunk.toString();
       const lines=buf.split('\n'); buf=lines.pop();
@@ -206,12 +192,7 @@ function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
     res.on('end',()=>{if(!done)onDone();});
     res.on('error',onError);
   });
-  req.setTimeout(25000, () => {
-    console.error('❌ Claude request timeout after 25s');
-    req.destroy();
-    onError(new Error('Claude API timeout'));
-  });
-  req.on('error',(e)=>{console.error('❌ Claude req error:',e.message);onError(e);}); req.write(body); req.end();
+  req.on('error',onError); req.write(body); req.end();
 }
 
 // ── System prompts ────────────────────────────────────────────────────────────
@@ -468,16 +449,12 @@ const server = http.createServer(async (req,res)=>{
     // SSE headers — flush immediately
     res.writeHead(200,{
       'Content-Type':'text/event-stream',
-      'Cache-Control':'no-cache, no-transform',
+      'Cache-Control':'no-cache',
       'Connection':'keep-alive',
       'Access-Control-Allow-Origin':'*',
       'X-Accel-Buffering':'no',
-      'X-Content-Type-Options':'nosniff',
-      'Transfer-Encoding':'identity',
     });
-    if(req.socket) { req.socket.setNoDelay(true); req.socket.setTimeout(0); }
-    // Force flush on Render's proxy
-    res.flushHeaders();
+    if(req.socket) req.socket.setNoDelay(true);
 
     const send=(event,data)=>{
       try{ res.write('event: '+event+'\ndata: '+JSON.stringify(data)+'\n\n'); }catch{}
@@ -534,7 +511,7 @@ const server = http.createServer(async (req,res)=>{
     // KB search — fetch more YT results for video requests
     const [results,ytResults]=await Promise.all([
       Promise.resolve(search.search(searchQuery, 6)),
-      Promise.resolve(search.yt ? search.yt.search(searchQuery, isVideoRequest?8:4) : []),
+      Promise.resolve(search.yt?search.yt.search(searchQuery, isVideoRequest?8:3, isVideoRequest):[]),
     ]);
     const fromKB=results.length>0;
     const images=fromKB?filterRelevantImages(results,searchQuery,3):[];
@@ -547,13 +524,6 @@ const server = http.createServer(async (req,res)=>{
     // Send metadata first so UI shows sources/images while text streams
     send('meta',{fromKB,sources,images,videos,fromCache:false});
 
-    console.log('  [STREAM] Starting Claude stream for:', q.slice(0,50));
-
-    // Heartbeat every 5s to prevent Render proxy timeout
-    const heartbeat = setInterval(()=>{
-      if(!res.writableEnded) res.write(': heartbeat\n\n');
-    }, 5000);
-
     let fullText='', streamDone=false;
     streamClaude(
       system,
@@ -561,25 +531,22 @@ const server = http.createServer(async (req,res)=>{
       (chunk)=>{ fullText+=chunk; send('chunk',{text:chunk}); },
       async()=>{
         if(streamDone)return; streamDone=true;
-        clearInterval(heartbeat);
-        console.log('  [STREAM] Done, text length:', fullText.length);
-        // Get related questions before sending done (3s timeout)
-        let related = [];
-        try {
-          const relRaw = await Promise.race([
-            callClaude('Return ONLY a JSON array of 3 short follow-up questions, no other text.',
-              [{role:'user',content:'Question was: "'+q+'"\nAnswer started: "'+fullText.slice(0,200)+'"\nReturn JSON array of 3 follow-up questions.'}], 120),
-            new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))
-          ]);
-          const parsed = JSON.parse(relRaw.replace(/```json|```/g,'').trim());
-          if (Array.isArray(parsed)) related = parsed.slice(0,3);
-        } catch(e) { console.log('  [RELATED] skipped:', e.message); }
-        send('done',{related});
+        send('done',{related:[]});
         res.end();
-        cache.set(cacheKey,{answer:fullText,fromKB,sources,images,videos,related,ts:Date.now()});
-        try{saveCache();}catch{}
+        // Cache + related questions in background
+        cache.set(cacheKey,{answer:fullText,fromKB,sources,images,videos,related:[],ts:Date.now()});
+        callClaude('You are a helpful Ginesys ERP assistant.',[{role:'user',content:buildRelatedPrompt(q,fullText)}],200)
+          .then(raw=>{
+            try{
+              const rel=JSON.parse(raw.replace(/```json|```/g,'').trim());
+              if(Array.isArray(rel)){
+                const c=cache.get(cacheKey); if(c) c.related=rel;
+              }
+            }catch{}
+            try{saveCache();}catch{}
+          }).catch(()=>{});
       },
-      (err)=>{ clearInterval(heartbeat); console.log('  [STREAM] Error:',err.message); send('error',{message:err.message}); res.end(); }
+      (err)=>{ send('error',{message:err.message}); res.end(); }
     );
     return;
   }
@@ -700,7 +667,7 @@ server.on('error', err => {
 server.listen(currentPort,()=>{
   const s=search.getStats(), yt=search.yt?search.yt.getStats():{loaded:false,totalVideos:0};
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log('║  Ginesys AI Assistant  v10.0                     ║');
+  console.log('║  Ginesys AI Assistant  v6.0                      ║');
   console.log('╠══════════════════════════════════════════════════╣');
   console.log(`║  http://localhost:${currentPort}                            ║`);
   console.log(`║  Admin: http://localhost:${currentPort}/admin               ║`);

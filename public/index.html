@@ -60,7 +60,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 /* CHAT */
 .chat{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
-#messages{flex:1;overflow-y:auto;padding:28px 32px;display:flex;flex-direction:column;gap:24px;min-height:0;scroll-behavior:smooth;overscroll-behavior:contain}
+#messages{flex:1;overflow-y:auto;padding:28px 32px;display:flex;flex-direction:column;gap:24px;min-height:0}
 
 /* WELCOME */
 .welcome{max-width:520px;margin:4px auto;text-align:center;animation:fadeUp .5s ease}
@@ -73,7 +73,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .welcome-hint{font-size:13px;color:var(--text3);margin-top:16px;font-style:italic}
 
 /* MESSAGES */
-.msg-row{display:flex;gap:11px;animation:fadeUp .3s ease}.msg-row.bot>.stream-wrap,.msg-row.bot>.acard{flex:1;min-width:0;max-width:calc(100% - 52px)}.stream-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:0}
+.msg-row{display:flex;gap:11px;animation:fadeUp .3s ease}.msg-row.bot>.stream-wrap,.msg-row.bot>.acard{flex:1;min-width:0;max-width:calc(100% - 46px)}
 .msg-row.user{flex-direction:row-reverse}
 .avatar{width:34px;height:34px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .avatar.bot{background:var(--dark);border:2px solid rgba(106,191,75,.5);padding:4px}
@@ -646,9 +646,7 @@ async function sendMsg() {
               <div class="ss-cap">${esc(cap)}</div></div>`;
           }).join('')
         }</div>`;
-        const sc = streamRow.querySelector('.stream-card');
-        if (sc && sc.nextSibling) streamRow.querySelector('.stream-wrap').insertBefore(ssDiv, sc.nextSibling);
-        else streamRow.querySelector('.stream-wrap').appendChild(ssDiv);
+        streamRow.querySelector('.stream-wrap').insertBefore(ssDiv, streamRow.querySelector('.stream-card'));
       }
     }
     // Videos
@@ -683,15 +681,14 @@ async function sendMsg() {
 
   function flushWords() {
     if (!wordBuffer.length) { renderTimer=null; return; }
-    const batch = wordBuffer.splice(0, 3).join('');
+    const batch = wordBuffer.splice(0, 2).join('');
     fullText += batch;
     if (contentEl) {
       contentEl.innerHTML = md(fullText);
-      // Auto-scroll only if user is near the bottom
-      const distFromBottom = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight;
-      if (distFromBottom < 120) msgsEl.scrollTop = msgsEl.scrollHeight;
+      // Only auto-scroll if user hasn't manually scrolled up
+      if (!userScrolledUp) msgsEl.scrollTop = msgsEl.scrollHeight;
     }
-    renderTimer = setTimeout(flushWords, 15);
+    renderTimer = setTimeout(flushWords, 30);
   }
 
   function handleChunk(text) {
@@ -760,34 +757,42 @@ async function sendMsg() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question:text, history:chatHistory.slice(-8), lang:getLangInstruction() }),
     });
+
     if (!resp.ok) throw new Error('Server error: ' + resp.status);
-    if (!resp.body) throw new Error('No stream body');
+    if (!resp.body) throw new Error('Streaming not supported');
+
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buf += decoder.decode(value, { stream: true });
-      const parts = buf.split('\n\n'); buf = parts.pop();
+
+      // Parse SSE events from buffer
+      const parts = buf.split('\n\n');
+      buf = parts.pop(); // keep incomplete last part
+
       for (const part of parts) {
-        let evType = 'message', dataStr = '';
+        let eventType = 'message', dataStr = '';
         for (const line of part.split('\n')) {
-          if (line.startsWith('event: ')) evType = line.slice(7).trim();
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim();
           else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
         }
         if (!dataStr) continue;
         try {
-          const d = JSON.parse(dataStr);
-          if      (evType === 'meta')   handleMeta(d);
-          else if (evType === 'chunk')  handleChunk(d.text || '');
-          else if (evType === 'done')   handleDone(d);
-          else if (evType === 'answer') handleAnswer(d);
-          else if (evType === 'error')  handleError(d.message || 'Unknown error');
+          const data = JSON.parse(dataStr);
+          if      (eventType === 'meta')   handleMeta(data);
+          else if (eventType === 'chunk')  handleChunk(data.text || '');
+          else if (eventType === 'done')   handleDone(data);
+          else if (eventType === 'answer') handleAnswer(data);
+          else if (eventType === 'error')  handleError(data.message || 'Unknown error');
         } catch(e) {}
       }
     }
-    if (!isDone) handleDone({ related: [] });
+    if (!isDone) handleDone({ related:[] });
+
   } catch(err) {
     handleError(err.message);
     chatHistory.pop();
