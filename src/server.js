@@ -489,7 +489,7 @@ const server = http.createServer(async (req,res)=>{
     // Casual chat
     if(isCasualChat(q)){
       try{
-        const answer=await callClaude(buildCasualPrompt(langInstruction),[...histMsgs,{role:'user',content:q}],400);
+        const answer=await callClaude(buildCasualPrompt(langInstruction),[...histMsgs,{role:'user',content:langInstruction ? q+'\n\n'+langInstruction : q}],400);
         send('answer',{text:answer,casual:true,sources:[],images:[],videos:[],related:[]});
       }catch(e){ send('error',{message:e.message}); }
       return res.end();
@@ -557,7 +557,7 @@ const server = http.createServer(async (req,res)=>{
     let fullText='', streamDone=false;
     streamClaude(
       system,
-      [...histMsgs,{role:'user',content:q}],
+      [...histMsgs,{role:'user',content:langInstruction ? q+'\n\n'+langInstruction : q}],
       (chunk)=>{ fullText+=chunk; send('chunk',{text:chunk}); },
       async()=>{
         if(streamDone)return; streamDone=true;
@@ -596,7 +596,7 @@ const server = http.createServer(async (req,res)=>{
 
       // Casual chat — fast Haiku response
       if(isCasualChat(q)){
-        const answer = await callClaude(buildCasualPrompt(langInstruction),[...histMsgs,{role:'user',content:q}],400);
+        const answer = await callClaude(buildCasualPrompt(langInstruction),[...histMsgs,{role:'user',content:langInstruction ? q+'\n\n'+langInstruction : q}],400);
         return jsonRes(res,200,{answer,fromKB:false,casual:true,sources:[],images:[],videos:[],related:[]});
       }
 
@@ -624,7 +624,7 @@ const server = http.createServer(async (req,res)=>{
       const system  = buildKBPrompt(results, q, ytResults, langInstruction);
 
       // Get answer from Claude
-      const answer = await callClaude(system,[...histMsgs,{role:'user',content:q}],4096);
+      const answer = await callClaude(system,[...histMsgs,{role:'user',content:langInstruction ? q+'\n\n'+langInstruction : q}],4096);
 
       // Return answer IMMEDIATELY — don't wait for related questions
       cache.set(cacheKey,{answer,fromKB,sources,images,videos,related:[],ts:Date.now()});
