@@ -183,7 +183,7 @@ async function callClaude(system,messages,maxTokens=512) {
 // ── Claude — streaming (main answers) ────────────────────────────────────────
 function streamClaude(system,messages,onChunk,onDone,onError,maxTokens=4096) {
   if (!ANTHROPIC_API_KEY) return onError(new Error('ANTHROPIC_API_KEY not configured'));
-  const body=JSON.stringify({model:'claude-opus-4-6',max_tokens:maxTokens,stream:true,system,messages});
+  const body=JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:maxTokens,stream:true,system,messages});
   const req=https.request({
     hostname:'api.anthropic.com',path:'/v1/messages',method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Length':Buffer.byteLength(body)},
