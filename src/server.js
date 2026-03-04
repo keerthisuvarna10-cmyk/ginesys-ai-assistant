@@ -620,7 +620,7 @@ const server = http.createServer(async (req,res)=>{
     // KB search — fetch more YT results for video requests
     const [results,ytResults]=await Promise.all([
       Promise.resolve(search.search(searchQuery, 6)),
-      Promise.resolve(search.yt?search.yt.search(searchQuery, isVideoRequest?8:3, isVideoRequest):[]),
+      Promise.resolve(search.yt && isVideoRequest ? search.yt.search(searchQuery, 8, true) : []),
     ]);
     const fromKB=results.length>0;
     const images=fromKB?filterRelevantImages(results,searchQuery,3):[];
