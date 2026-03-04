@@ -42,6 +42,17 @@ const ANALYTICS_FILE = path.join(DATA_DIR,'analytics.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR,{recursive:true});
 search.load();
 
+// ── Startup KB check — warn clearly if KB is missing on Railway ───────────────
+const INDEX_FILE = path.join(DATA_DIR,'kb-index.json');
+if (!fs.existsSync(INDEX_FILE)) {
+  console.warn('\n⚠️  ══════════════════════════════════════════════════════════');
+  console.warn('⚠️  kb-index.json NOT FOUND — KB search is DISABLED.');
+  console.warn('⚠️  All answers will come from Claude AI only (no KB context).');
+  console.warn('⚠️  Fix: POST /api/crawl with {"secret":"<CRAWL_SECRET>"} to build the index.');
+  console.warn('⚠️  Or set ATLASSIAN_EMAIL + ATLASSIAN_API_TOKEN env vars and hit /api/crawl');
+  console.warn('⚠️  ══════════════════════════════════════════════════════════\n');
+}
+
 // ── In-memory cache ───────────────────────────────────────────────────────────
 const cache = new Map();
 try {
@@ -240,8 +251,12 @@ function buildCasualPrompt(langInstruction='') {
 
 function buildKBPrompt(results, q, ytResults=[], langInstruction='') {
   if (!results||!results.length) {
+    const kbLoaded = search.getStats().loaded;
     const langPrefix2 = langInstruction ? `***${langInstruction}***\n\n` : '';
-  return `${langPrefix2}${AI_PERSONA}\n\nNo KB articles found. Answer from Ginesys ERP expertise. Be complete and confident.\n\nQuestion: "${q}"\n\nFormat: ## heading, numbered steps, **bold** UI elements`;
+    const kbNote = kbLoaded
+      ? '' // KB is loaded but no results — Claude fills in
+      : '\n\n[SYSTEM NOTE: Knowledge Base index is not loaded on this server. Answering from general Ginesys ERP knowledge only.]';
+    return `${langPrefix2}${AI_PERSONA}${kbNote}\n\nNo KB articles found. Answer from Ginesys ERP expertise. Be complete and confident.\n\nQuestion: "${q}"\n\nFormat: ## heading, numbered steps, **bold** UI elements`;
   }
   const kb = results.map((r,i)=>{
     const crumb=[...(r.ancestors||[]),r.title].join(' › ');
@@ -415,6 +430,77 @@ const server = http.createServer(async (req,res)=>{
   if(pn==='/api/status'&&req.method==='GET'){
     const s=search.getStats(), yt=search.yt?search.yt.getStats():{loaded:false,totalVideos:0};
     return jsonRes(res,200,{status:'ok',version:'6.0.0',anthropic:!!ANTHROPIC_API_KEY,kb:s,youtube:yt,cache:cache.size,totalQueries:analytics.totalQueries});
+  }
+
+  // ── GET /api/crawl-status ────────────────────────────────────────────────────
+  if(pn==='/api/crawl-status'&&req.method==='GET'){
+    const indexExists = fs.existsSync(INDEX_FILE);
+    const progressFile = path.join(DATA_DIR,'crawl-progress.json');
+    let crawlRunning = false, crawlProgress = null;
+    try {
+      if (fs.existsSync(progressFile)) {
+        crawlProgress = JSON.parse(fs.readFileSync(progressFile,'utf8'));
+        // If progress file was modified in last 5 minutes, crawl is likely running
+        crawlRunning = (Date.now() - fs.statSync(progressFile).mtimeMs) < 300000;
+      }
+    } catch(e) {}
+    const kbStats = search.getStats();
+    return jsonRes(res,200,{
+      kbLoaded: kbStats.loaded,
+      kbPages: kbStats.totalPages,
+      indexExists,
+      crawlRunning,
+      crawlProgress,
+      message: kbStats.loaded
+        ? `✅ KB loaded: ${kbStats.totalPages} pages`
+        : indexExists ? '⚠️ Index file exists but not loaded — restart server'
+        : '❌ No KB index — POST /api/crawl to build it',
+    });
+  }
+
+  // ── POST /api/crawl — trigger KB crawl remotely (Railway / production) ──────
+  if(pn==='/api/crawl'&&req.method==='POST'){
+    // Secret check — set CRAWL_SECRET env var on Railway to protect this endpoint
+    const body = await parseBody(req);
+    const secret = process.env.CRAWL_SECRET;
+    if (secret && body.secret !== secret) {
+      return jsonRes(res,403,{error:'Invalid secret. Set CRAWL_SECRET env var and pass it as {"secret":"..."}'});
+    }
+    if (!ATLASSIAN_EMAIL || !ATLASSIAN_API_TOKEN) {
+      return jsonRes(res,500,{error:'ATLASSIAN_EMAIL and ATLASSIAN_API_TOKEN must be set as Railway env vars'});
+    }
+
+    // Respond immediately — crawl runs in background
+    jsonRes(res,202,{
+      ok: true,
+      message: 'Crawl started in background. Poll GET /api/crawl-status for progress. Reload will happen automatically when done.',
+    });
+
+    // Run crawl as child process so it doesn't block the server
+    const { spawn } = require('child_process');
+    const crawlScript = path.join(__dirname,'..','scripts','crawl-kb.js');
+    if (!fs.existsSync(crawlScript)) {
+      console.error('❌ crawl-kb.js not found at:', crawlScript);
+      return;
+    }
+    console.log('\n🔄 Starting remote KB crawl...');
+    const child = spawn('node', [crawlScript], {
+      env: { ...process.env },
+      stdio: ['ignore','pipe','pipe'],
+      detached: false,
+    });
+    child.stdout.on('data', d => process.stdout.write('[CRAWL] ' + d));
+    child.stderr.on('data', d => process.stderr.write('[CRAWL] ' + d));
+    child.on('close', code => {
+      if (code === 0) {
+        console.log('\n✅ Remote crawl finished — reloading KB index...');
+        const ok = search.reload ? search.reload() : search.load();
+        console.log(ok ? `✅ KB reloaded: ${search.getStats().totalPages} pages` : '❌ KB reload failed');
+      } else {
+        console.error(`\n❌ Crawl process exited with code ${code}`);
+      }
+    });
+    return;
   }
 
   // ── GET /api/admin ──────────────────────────────────────────────────────────
