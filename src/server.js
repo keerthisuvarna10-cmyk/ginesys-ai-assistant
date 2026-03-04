@@ -624,7 +624,7 @@ const server = http.createServer(async (req,res)=>{
     ]);
     const fromKB=results.length>0;
     const images=fromKB?filterRelevantImages(results,searchQuery,3):[];
-    const videos=buildVideos(fromKB?results:[],ytResults,searchQuery, isVideoRequest);
+    const videos=isVideoRequest?buildVideos(fromKB?results:[],ytResults,searchQuery,true):[];
     const sources=results.map(r=>({title:r.title,url:r.url,score:r.score,space:r.spaceKey}));
     // For follow-up video requests, tell Claude the actual topic
     const effectiveQ = (isVideoRequest && searchQuery !== q) ? (q + ' (about: ' + searchQuery + ')') : q;
