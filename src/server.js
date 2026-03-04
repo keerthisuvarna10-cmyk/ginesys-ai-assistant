@@ -319,7 +319,7 @@ function filterRelevantImages(results, query, max=3) {
       relevance: score,
     };
   }))
-  .filter(i => i.relevance >= 8)   // only genuinely relevant images
+  .filter(i => i.relevance >= 25)   // only genuinely relevant images
   .sort((a,b) => b.relevance - a.relevance)
   .slice(0, max);
 }
