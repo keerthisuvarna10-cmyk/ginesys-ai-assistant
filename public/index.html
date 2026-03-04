@@ -240,11 +240,33 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .lang-btn.active{background:#6366f1;color:#fff;border-color:#6366f1;font-weight:700}
 /* ── Language indicator in chat ───────────────────────────*/
 .lang-indicator{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#6366f1;background:#eef2ff;padding:2px 8px;border-radius:10px;margin-bottom:6px;font-weight:600}
+/* ── PDF Export button ─────────────────────────────────── */
+.pdf-btn{background:none;border:1.5px solid #d1d5db;border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer;color:#6b7280;transition:all .15s;display:inline-flex;align-items:center;gap:5px;font-family:inherit;font-weight:500}
+.pdf-btn:hover{border-color:#6366f1;color:#4338ca;background:#eef2ff}
+/* ── Print styles for PDF export ──────────────────────── */
+@media print{
+  .topbar,.sidebar,.input-area,.lang-bar,.feedback-row,.related-qs,.badge-bar,
+  .msg-row.user,.status-pill,.kb-count,.pdf-btn,#voice-btn,#send-btn{display:none!important}
+  body{background:#fff;overflow:visible}
+  .layout{display:block}
+  .chat{display:block}
+  #messages{overflow:visible;padding:10px}
+  .acard,.stream-card{box-shadow:none;border:1px solid #e2e8f0;break-inside:avoid}
+  .msg-row{break-inside:avoid;page-break-inside:avoid}
+  .ss-img{max-height:200px}
+  .print-header{display:block!important}
+}
+.print-header{display:none;text-align:center;padding:16px 0 8px;border-bottom:2px solid #3dae2b;margin-bottom:16px}
+.print-header h2{font-size:18px;color:#1a1f2e}
+.print-header p{font-size:12px;color:#64748b;margin-top:4px}
 </style>
 </head>
 <body>
-
-<!-- TOP BAR -->
+<!-- Print header — only visible when printing -->
+<div class="print-header">
+  <h2>Ginesys AI Assistant — Answer Export</h2>
+  <p id="print-date"></p>
+</div>
 <header class="topbar">
   <div class="tb-left">
     <a class="g-logo" href="https://www.ginesys.in" target="_blank">
@@ -716,7 +738,8 @@ async function sendMsg() {
       const qEscaped = esc(text.replace(/'/g,"\'"));
       fbDiv.innerHTML = `<span class="fb-label">Was this helpful?</span>
         <button class="fb-btn" onclick="sendFeedback(this,'up','${qEscaped}')">👍</button>
-        <button class="fb-btn" onclick="sendFeedback(this,'down','${qEscaped}')">👎</button>`;
+        <button class="fb-btn" onclick="sendFeedback(this,'down','${qEscaped}')">👎</button>
+        <button class="pdf-btn" onclick="exportPDF(this)" title="Export as PDF">📄 Save PDF</button>`;
       streamRow.querySelector('.stream-wrap').appendChild(fbDiv);
     }
     // Related questions
@@ -918,6 +941,20 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLB();});
     };
     return map[currentLang] || '';
   }
+  // ── PDF Export ──────────────────────────────────────────────────────────────
+  function exportPDF(btn) {
+    // Find the answer card this button belongs to
+    const streamWrap = btn.closest('.stream-wrap');
+    const question = streamWrap
+      ? streamWrap.closest('.msg-row')?.previousElementSibling?.querySelector('.user-bubble')?.textContent
+      : '';
+
+    // Set print date and question in header
+    document.getElementById('print-date').textContent =
+      (question ? `Question: "${question}" — ` : '') +
+      'Exported: ' + new Date().toLocaleString();
+
+    window.print();
+  }
 </script>
-</body>
 </html>
