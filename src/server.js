@@ -65,7 +65,7 @@ try {
       const saved = JSON.parse(fs.readFileSync(CACHE_FILE,'utf8'));
       const now = Date.now();
       Object.entries(saved).forEach(([k,v]) => {
-        if (now - v.ts < 86400000) cache.set(k,v); // 24hr TTL
+        if (now - v.ts < 1296000000) cache.set(k,v); // 15 days TTL
       });
       console.log(`✅ Cache loaded: ${cache.size} entries`);
     }
