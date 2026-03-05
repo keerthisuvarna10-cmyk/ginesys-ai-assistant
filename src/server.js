@@ -699,13 +699,14 @@ const server = http.createServer(async (req,res)=>{
       }
 
       // KB search
+      const isVideoRequest = /\b(video|tutorial|watch|show me|youtube|demo|recording|how.*video|video.*how)\b/i.test(q);
       const [results, ytResults] = await Promise.all([
         Promise.resolve(search.search(q, 6)),
-        Promise.resolve(search.yt ? search.yt.search(q,3) : []),
+        Promise.resolve(search.yt && isVideoRequest ? search.yt.search(q, 8, true) : []),
       ]);
       const fromKB  = results.length > 0;
       const images  = fromKB ? filterRelevantImages(results, q, 3) : [];
-      const videos  = buildVideos(fromKB ? results : [], ytResults, q);
+      const videos  = isVideoRequest ? buildVideos(fromKB ? results : [], ytResults, q, true) : [];
       const sources = results.map(r=>({title:r.title,url:r.url,score:r.score,space:r.spaceKey}));
       const system  = buildKBPrompt(results, q, ytResults, langInstruction);
 
